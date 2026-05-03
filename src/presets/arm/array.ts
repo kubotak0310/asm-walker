@@ -1,0 +1,233 @@
+import type { PresetData } from '@/core/types'
+import { BASE_SP_ARM } from '@/core/types'
+
+const SP0 = BASE_SP_ARM
+const ARR_BASE = SP0 - 16  // arr[3] のベースアドレス
+
+export const armArray: PresetData = {
+  id: 'array',
+  name: '配列を関数に渡す',
+  arch: 'arm',
+
+  cCode: [
+    'int sum_array(int *a, int n) {',
+    '    int s = 0;',
+    '    s += a[0];',
+    '    s += a[1];',
+    '    s += a[2];',
+    '    return s;',
+    '}',
+    '',
+    'int main() {',
+    '    int arr[3] = {1, 2, 3};',
+    '    return sum_array(arr, 3);',
+    '}',
+  ],
+
+  asmCode: [
+    { text: '; === main ===', isHeader: true, phase: 'caller' },
+    { text: '    PUSH {LR}' },
+    { text: '    SUB  SP, SP, #16    ; arr[3] + アライメント' },
+    { text: '    MOV  R0, #1' },
+    { text: '    STR  R0, [SP, #0]   ; arr[0] = 1' },
+    { text: '    MOV  R0, #2' },
+    { text: '    STR  R0, [SP, #4]   ; arr[1] = 2' },
+    { text: '    MOV  R0, #3' },
+    { text: '    STR  R0, [SP, #8]   ; arr[2] = 3' },
+    { text: '    MOV  R0, SP         ; 第1引数 = arr の先頭アドレス' },
+    { text: '    MOV  R1, #3         ; 第2引数 = n = 3' },
+    { text: '    BL   sum_array' },
+    { text: '' },
+    { text: '; === sum_array(R0=arr, R1=n) ===', isHeader: true, phase: 'callee' },
+    { text: '    MOV  R4, R0         ; R4 = arr ポインタを保存' },
+    { text: '    MOV  R2, #0         ; s = 0' },
+    { text: '    LDR  R3, [R4, #0]   ; a[0]' },
+    { text: '    ADDS R2, R2, R3     ; s += a[0]' },
+    { text: '    LDR  R3, [R4, #4]   ; a[1]（オフセット4 = 4バイト × 1）' },
+    { text: '    ADDS R2, R2, R3     ; s += a[1]' },
+    { text: '    LDR  R3, [R4, #8]   ; a[2]（オフセット8 = 4バイト × 2）' },
+    { text: '    ADDS R2, R2, R3     ; s += a[2]' },
+    { text: '    MOV  R0, R2         ; 戻り値 = s' },
+    { text: '    BX   LR' },
+  ],
+
+  initialState: {
+    regs: { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, r6: 0, r7: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0 },
+    sp: SP0,
+    fp: 0,
+    lr: 0x08000001,
+    pc: 0,
+    stack: {},
+    stackMeta: {},
+    flags: { zero: false, negative: false, carry: false, overflow: false },
+    mode: 'thread',
+    frames: [{ name: 'main', lo: SP0, hi: SP0, color: 'purple' }],
+  },
+
+  steps: [
+    {
+      type: 'sw', phase: 'caller', asmLine: 1, cLine: 8,
+      explain: 'PUSH {LR} — LRを保存',
+      effect: 'SP -= 4',
+      update: {
+        sp: SP0 - 4,
+        stackSet: { [SP0 - 4]: 0x08000001 },
+        metaSet: { [SP0 - 4]: { label: '保存 LR', kind: 'sw' } },
+        frames: [{ name: 'main', lo: SP0 - 4, hi: SP0, color: 'purple' }],
+      },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 2, cLine: 9,
+      explain: 'SUB SP, SP, #16 — arr[3] + アライメント用の領域を確保',
+      effect: 'SP -= 16',
+      update: {
+        sp: ARR_BASE,
+        frames: [{ name: 'main', lo: ARR_BASE, hi: SP0, color: 'purple' }],
+      },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 3, cLine: 9,
+      explain: 'MOV R0, #1',
+      effect: 'R0 = 1',
+      update: { regs: { r0: 1 } },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 4, cLine: 9,
+      explain: 'STR R0, [SP, #0] — arr[0] = 1',
+      effect: '[SP+0] = 1',
+      isArr: true,
+      update: {
+        stackSet: { [ARR_BASE]: 1 },
+        metaSet: { [ARR_BASE]: { label: 'arr[0] = 1', kind: 'arr' } },
+      },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 5, cLine: 9,
+      explain: 'MOV R0, #2',
+      effect: 'R0 = 2',
+      update: { regs: { r0: 2 } },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 6, cLine: 9,
+      explain: 'STR R0, [SP, #4] — arr[1] = 2',
+      effect: '[SP+4] = 2',
+      isArr: true,
+      update: {
+        stackSet: { [ARR_BASE + 4]: 2 },
+        metaSet: { [ARR_BASE + 4]: { label: 'arr[1] = 2', kind: 'arr' } },
+      },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 7, cLine: 9,
+      explain: 'MOV R0, #3',
+      effect: 'R0 = 3',
+      update: { regs: { r0: 3 } },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 8, cLine: 9,
+      explain: 'STR R0, [SP, #8] — arr[2] = 3',
+      effect: '[SP+8] = 3',
+      isArr: true,
+      update: {
+        stackSet: { [ARR_BASE + 8]: 3 },
+        metaSet: { [ARR_BASE + 8]: { label: 'arr[2] = 3', kind: 'arr' } },
+      },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 9, cLine: 10,
+      explain: 'MOV R0, SP — arr の先頭アドレスを第1引数R0に設定',
+      effect: `R0 = SP = 0x${ARR_BASE.toString(16)}（配列はポインタ渡し—コピーなし）`,
+      isArr: true,
+      isPtr: true,
+      update: { regs: { r0: ARR_BASE } },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 10, cLine: 10,
+      explain: 'MOV R1, #3 — 要素数3を第2引数に',
+      effect: 'R1 = 3',
+      update: { regs: { r1: 3 } },
+    },
+    {
+      type: 'sw', phase: 'caller', asmLine: 11, cLine: 10,
+      explain: 'BL sum_array — 関数呼び出し',
+      effect: `LR = 次の命令アドレス、PC = sum_array の先頭`,
+      update: {
+        lr: 0x08000020,
+        frames: [
+          { name: 'main', lo: ARR_BASE, hi: SP0, color: 'purple' },
+          { name: 'sum_array', lo: ARR_BASE, hi: ARR_BASE, color: 'green' },
+        ],
+      },
+    },
+    {
+      type: 'sw', phase: 'callee', asmLine: 14, cLine: 0,
+      explain: 'MOV R4, R0 — arr ポインタを callee-saved レジスタR4に保存',
+      effect: `R4 = R0 = 0x${ARR_BASE.toString(16)}（R0は後で上書きされる）`,
+      isArr: true,
+      update: { regs: { r4: ARR_BASE } },
+    },
+    {
+      type: 'sw', phase: 'callee', asmLine: 15, cLine: 1,
+      explain: 'MOV R2, #0 — s = 0',
+      effect: 'R2 = 0',
+      update: { regs: { r2: 0 } },
+    },
+    {
+      type: 'sw', phase: 'callee', asmLine: 16, cLine: 2,
+      explain: 'LDR R3, [R4, #0] — a[0] をR3にロード（R4基準オフセット0）',
+      effect: `R3 = [0x${ARR_BASE.toString(16)}+0] = 1`,
+      isArr: true,
+      update: { regs: { r3: 1 } },
+    },
+    {
+      type: 'sw', phase: 'callee', asmLine: 17, cLine: 2,
+      explain: 'ADDS R2, R2, R3 — s += a[0]',
+      effect: 'R2 = 0 + 1 = 1',
+      isArr: true,
+      update: { regs: { r2: 1 } },
+    },
+    {
+      type: 'sw', phase: 'callee', asmLine: 18, cLine: 3,
+      explain: 'LDR R3, [R4, #4] — a[1] をロード（オフセット4 = int1個分）',
+      effect: `R3 = [0x${ARR_BASE.toString(16)}+4] = 2`,
+      isArr: true,
+      update: { regs: { r3: 2 } },
+    },
+    {
+      type: 'sw', phase: 'callee', asmLine: 19, cLine: 3,
+      explain: 'ADDS R2, R2, R3 — s += a[1]',
+      effect: 'R2 = 1 + 2 = 3',
+      isArr: true,
+      update: { regs: { r2: 3 } },
+    },
+    {
+      type: 'sw', phase: 'callee', asmLine: 20, cLine: 4,
+      explain: 'LDR R3, [R4, #8] — a[2] をロード（オフセット8 = int2個分）',
+      effect: `R3 = [0x${ARR_BASE.toString(16)}+8] = 3`,
+      isArr: true,
+      update: { regs: { r3: 3 } },
+    },
+    {
+      type: 'sw', phase: 'callee', asmLine: 21, cLine: 4,
+      explain: 'ADDS R2, R2, R3 — s += a[2]',
+      effect: 'R2 = 3 + 3 = 6',
+      isArr: true,
+      update: { regs: { r2: 6 } },
+    },
+    {
+      type: 'sw', phase: 'ret', asmLine: 22, cLine: 5,
+      explain: 'MOV R0, R2 — 戻り値をR0にセット',
+      effect: 'R0 = 6',
+      update: { regs: { r0: 6 } },
+    },
+    {
+      type: 'sw', phase: 'ret', asmLine: 23, cLine: 5,
+      explain: 'BX LR — LRにジャンプして sum_array から戻る',
+      effect: `PC = LR = 0x08000020、mainに戻る。R0 = 6 が戻り値`,
+      update: {
+        pc: 0x08000020,
+        frames: [{ name: 'main', lo: ARR_BASE, hi: SP0, color: 'purple' }],
+      },
+    },
+  ],
+}

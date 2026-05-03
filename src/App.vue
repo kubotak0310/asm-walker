@@ -12,20 +12,36 @@
         <div class="flex flex-wrap items-center gap-3">
           <ArchSwitch />
           <div class="h-5 w-px bg-gray-700" />
-          <PresetSelector />
+          <!-- Mode toggle -->
+          <div class="flex rounded overflow-hidden border border-gray-600 text-xs font-bold">
+            <button
+              :class="inputMode === 'preset' ? 'bg-purple-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
+              class="px-3 py-1 transition-colors"
+              @click="setInputMode('preset')"
+            >プリセット</button>
+            <button
+              :class="inputMode === 'free' ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
+              class="px-3 py-1 transition-colors"
+              @click="setInputMode('free')"
+            >自由入力</button>
+          </div>
+          <PresetSelector v-if="inputMode === 'preset'" />
         </div>
         <StepController />
       </div>
 
-      <!-- Guide panel (collapsible) -->
-      <GuidePanel />
+      <!-- Guide panel (collapsible, preset mode only) -->
+      <GuidePanel v-if="inputMode === 'preset'" />
+
+      <!-- Free-input editor (full width, free mode only) -->
+      <FreeInputPanel v-if="inputMode === 'free'" />
 
       <!-- Top: C source (4/12) + Assembly (8/12) -->
       <div class="grid grid-cols-12 gap-3">
-        <div class="col-span-12 lg:col-span-4">
+        <div v-if="inputMode === 'preset'" class="col-span-12 lg:col-span-4">
           <CSourcePanel />
         </div>
-        <div class="col-span-12 lg:col-span-8">
+        <div :class="inputMode === 'free' ? 'col-span-12' : 'col-span-12 lg:col-span-8'">
           <CodePanel />
         </div>
       </div>
@@ -68,4 +84,8 @@ import SpecialRegPanel from '@/components/SpecialRegPanel.vue'
 import StackPanel from '@/components/StackPanel.vue'
 import FrameViz from '@/components/FrameViz.vue'
 import DiffPanel from '@/components/DiffPanel.vue'
+import FreeInputPanel from '@/components/FreeInputPanel.vue'
+import { useSimulator } from '@/composables/useSimulator'
+
+const { inputMode, setInputMode } = useSimulator()
 </script>

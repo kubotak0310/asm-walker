@@ -1,11 +1,14 @@
 import { ref, computed } from 'vue'
 import type { MachineState, Arch } from '@/core/types'
+import { BASE_SP_ARM } from '@/core/types'
 import type { PresetData } from '@/presets/index'
 import { buildStates } from '@/core/simulator'
 import { getPresets, getPreset } from '@/presets/index'
 import { x86Guides } from '@/guides/x86'
 import { armGuides } from '@/guides/arm'
 import type { GuideData } from '@/guides/x86'
+import { parseARM } from '@/core/arm/parser'
+import { traceProgram } from '@/core/arm/tracer'
 
 const arch = ref<Arch>('arm')
 const currentPresetId = ref('funcCall')
@@ -14,6 +17,21 @@ const guideOpen = ref(false)
 const diffOpen = ref(false)
 const states = ref<MachineState[]>([])
 const preset = ref<PresetData | null>(null)
+const inputMode = ref<'preset' | 'free'>('preset')
+const freeInputError = ref<string | null>(null)
+
+const FREE_INPUT_INITIAL_STATE: MachineState = {
+  regs: { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, r6: 0, r7: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0 },
+  sp: BASE_SP_ARM,
+  fp: 0,
+  lr: 0x08000001,
+  pc: 0x08000000,
+  stack: {},
+  stackMeta: {},
+  flags: { zero: false, negative: false, carry: false, overflow: false },
+  mode: 'thread',
+  frames: [{ name: 'main', lo: BASE_SP_ARM, hi: BASE_SP_ARM, color: 'purple' }],
+}
 
 function loadPreset(newArch: Arch, presetId: string) {
   const p = getPreset(newArch, presetId)
@@ -63,8 +81,36 @@ function toggleDiff() {
   diffOpen.value = !diffOpen.value
 }
 
+function setInputMode(mode: 'preset' | 'free') {
+  inputMode.value = mode
+  if (mode === 'preset') {
+    loadPreset(arch.value, currentPresetId.value)
+  }
+}
+
+function simulateFreeInput(asmText: string) {
+  const parseResult = parseARM(asmText)
+  if (parseResult.errors.length > 0) {
+    freeInputError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
+    return
+  }
+  const result = traceProgram(parseResult, FREE_INPUT_INITIAL_STATE)
+  freeInputError.value = result.error ?? null
+  states.value = result.states
+  preset.value = {
+    id: 'free',
+    name: '自由入力',
+    arch: 'arm',
+    cCode: [],
+    asmCode: result.asmLines,
+    steps: result.steps,
+    initialState: FREE_INPUT_INITIAL_STATE,
+  }
+  currentStep.value = 0
+}
+
 // Initialize
-loadPreset('x86', 'funcCall')
+loadPreset('arm', 'funcCall')
 
 export function useSimulator() {
   const currentState = computed<MachineState>(() => {
@@ -125,6 +171,8 @@ export function useSimulator() {
     diffOpen,
     displayPc,
     displayPcChanged,
+    inputMode,
+    freeInputError,
     setArch,
     selectPreset,
     nextStep,
@@ -132,5 +180,7 @@ export function useSimulator() {
     reset,
     toggleGuide,
     toggleDiff,
+    setInputMode,
+    simulateFreeInput,
   }
 }

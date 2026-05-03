@@ -2,7 +2,7 @@ import type { PresetData } from '@/core/types'
 import { BASE_SP_ARM } from '@/core/types'
 
 const SP0 = BASE_SP_ARM
-const ARR_BASE = SP0 - 16  // arr[3] のベースアドレス
+const ARR_BASE = SP0 - 20  // arr[3] のベースアドレス（PUSH {LR} で -4、SUB SP,#16 で -16）
 
 export const armArray: PresetData = {
   id: 'array',

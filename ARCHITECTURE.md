@@ -35,15 +35,8 @@ asm-walker/
 │   │   ├── FrameViz.vue            # スタックフレーム色分け図（3層ネスト）
 │   │   └── DiffPanel.vue           # x86 vs ARM 差分（x86/ARM両対応、最下部、デフォルト非表示）
 │   ├── core/
-│   │   ├── simulator.ts            # ステップ実行エンジン（アーキ非依存）
-│   │   ├── x86/
-│   │   │   ├── simulator.ts        # x86命令シミュレーター
-│   │   │   └── instructions.ts     # x86命令定義・説明文
-│   │   ├── arm/
-│   │   │   ├── simulator.ts        # ARM Thumb-2 シミュレーター
-│   │   │   ├── instructions.ts     # ARM命令定義・説明文
-│   │   │   └── interrupt.ts        # 例外スタックフレーム・EXC_RETURN処理
-│   │   └── types.ts                # 共通型定義
+│   │   ├── simulator.ts            # ステップ実行エンジン（applyUpdate / buildStates）
+│   │   └── types.ts                # 共通型定義（MachineState, StepData, StackFrame 等）
 │   ├── presets/
 │   │   ├── index.ts                # プリセット一覧エクスポート
 │   │   ├── x86/
@@ -63,8 +56,7 @@ asm-walker/
 │   │   ├── x86.ts                  # x86 各プリセットの学習ガイドデータ
 │   │   └── arm.ts                  # ARM 各プリセットの学習ガイドデータ
 │   ├── composables/
-│   │   ├── useSimulator.ts         # シミュレーター状態管理（Vue Composable）
-│   │   └── usePreset.ts            # プリセット選択状態管理
+│   │   └── useSimulator.ts         # シミュレーター・プリセット・アーキ状態管理（Vue Composable）
 │   ├── App.vue
 │   └── main.ts
 ├── public/
@@ -111,6 +103,7 @@ interface MachineState {
   stackMeta: Record<number, StackMeta>
   flags: Flags
   mode: 'thread' | 'handler'
+  frames: StackFrame[]           // スタックフレーム一覧（FrameViz / StackPanel ボーダー色に使用）
 }
 
 interface StackMeta {

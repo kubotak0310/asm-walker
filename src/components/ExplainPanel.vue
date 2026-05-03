@@ -32,9 +32,9 @@
       </div>
     </div>
 
-    <!-- 初期状態 -->
+    <!-- 全ステップ完了 -->
     <div v-else class="text-gray-500 text-sm flex items-center gap-2">
-      <span>▶ 「次のステップ」を押してシミュレーションを開始してください</span>
+      <span>✓ 全ステップ完了 — 「戻る」で見直せます</span>
     </div>
   </div>
 </template>

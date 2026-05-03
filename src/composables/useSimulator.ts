@@ -7,7 +7,7 @@ import { x86Guides } from '@/guides/x86'
 import { armGuides } from '@/guides/arm'
 import type { GuideData } from '@/guides/x86'
 
-const arch = ref<Arch>('x86')
+const arch = ref<Arch>('arm')
 const currentPresetId = ref('funcCall')
 const currentStep = ref(0)
 const guideOpen = ref(false)
@@ -78,23 +78,17 @@ export function useSimulator() {
 
   const currentStepData = computed(() => {
     if (!preset.value) return null
-    if (currentStep.value === 0) return null
-    return preset.value.steps[currentStep.value - 1]
+    return preset.value.steps[currentStep.value] ?? null
   })
 
   const totalSteps = computed(() => preset.value?.steps.length ?? 0)
 
-  // 現在ハイライト中の命令のアドレス（実行前の PC = prevState.pc）
-  // buildStates が毎ステップ PC を +4 進めるため、prevState.pc = 現在命令のアドレスになる
-  const displayPc = computed<number>(() => {
-    if (currentStep.value === 0 || !prevState.value) return currentState.value.pc
-    return prevState.value.pc
-  })
+  // ハイライト中の命令のアドレス = currentState.pc（次に実行される命令のアドレス）
+  const displayPc = computed<number>(() => currentState.value.pc)
 
   const displayPcChanged = computed<boolean>(() => {
-    if (currentStep.value <= 1) return currentStep.value === 1  // 最初のステップは変化として扱う
-    const ppPc = states.value[currentStep.value - 2]?.pc
-    return ppPc !== prevState.value?.pc
+    if (!prevState.value) return false
+    return currentState.value.pc !== prevState.value.pc
   })
 
   const isFirst = computed(() => currentStep.value === 0)

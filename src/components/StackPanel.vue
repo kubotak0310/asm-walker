@@ -32,6 +32,7 @@ interface Cell {
   kind: string
   isSP: boolean
   isNew: boolean
+  frameColor: 'purple' | 'green' | 'orange' | null
 }
 
 const cells = computed<Cell[]>(() => {
@@ -39,24 +40,35 @@ const cells = computed<Cell[]>(() => {
   const prev = prevState.value
   const prevAddrs = prev ? new Set(Object.keys(prev.stack).map(Number)) : new Set<number>()
 
+  const stackAddrs = Object.keys(state.stack).map(Number)
   const addrs = [...new Set([
-    ...Object.keys(state.stack).map(Number),
-    state.sp,
+    ...stackAddrs,
+    ...(stackAddrs.length > 0 ? [state.sp] : []),
   ])].sort((a, b) => b - a)
 
-  return addrs.map(addr => ({
-    addr,
-    value: state.stack[addr] ?? 0,
-    label: state.stackMeta[addr]?.label ?? '',
-    kind: state.stackMeta[addr]?.kind ?? 'sw',
-    isSP: addr === state.sp,
-    isNew: !prevAddrs.has(addr) && addr in state.stack,
-  }))
+  return addrs.map(addr => {
+    const frame = state.frames.find(f => addr >= f.lo && addr < f.hi)
+    return {
+      addr,
+      value: state.stack[addr] ?? 0,
+      label: state.stackMeta[addr]?.label ?? '',
+      kind: state.stackMeta[addr]?.kind ?? 'sw',
+      isSP: addr === state.sp,
+      isNew: !prevAddrs.has(addr) && addr in state.stack,
+      frameColor: frame?.color ?? null,
+    }
+  })
 })
 
 function rowClass(cell: Cell): string[] {
+  const borderColor =
+    cell.frameColor === 'purple' ? 'border-l-2 border-purple-500' :
+    cell.frameColor === 'green'  ? 'border-l-2 border-green-500' :
+    cell.frameColor === 'orange' ? 'border-l-2 border-orange-500' :
+                                   'border-l-2 border-transparent'
   return [
     'flex gap-2 items-center px-2 py-0.5 rounded',
+    borderColor,
     cell.isSP ? 'bg-orange-900/40' : cell.isNew ? 'bg-gray-700' : '',
   ]
 }

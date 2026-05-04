@@ -16,15 +16,24 @@ export interface CompilerOutput {
   asmText: string                 // joined text for parseARM()
   cLineMap: Map<number, number>   // 0-based asmLine index → 0-based C source line
   rawAsm: GodboltAsmItem[]
-  error?: string
+  error?: string                  // set when compilation failed (code !== 0)
+  gccOutput: string               // raw gcc stderr — always populated (errors + warnings)
+}
+
+function stripAnsi(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
 }
 
 export function adaptGodboltResponse(response: GodboltResponse): CompilerOutput {
+  const gccOutput = response.stderr?.map(e => stripAnsi(e.text)).join('\n').trim() ?? ''
+
   if (response.code !== 0 || !response.asm) {
-    const msg =
-      response.stderr?.map(e => e.text).join('\n').trim() ||
-      `コンパイルエラー (code ${response.code})`
-    return { asmText: '', cLineMap: new Map(), rawAsm: [], error: msg }
+    return {
+      asmText: '', cLineMap: new Map(), rawAsm: [],
+      error: gccOutput || `コンパイルエラー (exit code ${response.code})`,
+      gccOutput,
+    }
   }
 
   const lines: string[] = []
@@ -39,5 +48,5 @@ export function adaptGodboltResponse(response: GodboltResponse): CompilerOutput 
     }
   }
 
-  return { asmText: lines.join('\n'), cLineMap, rawAsm: response.asm }
+  return { asmText: lines.join('\n'), cLineMap, rawAsm: response.asm, gccOutput }
 }

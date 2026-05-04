@@ -10,8 +10,8 @@
         :key="cell.addr"
         :class="rowClass(cell)"
       >
-        <span class="text-gray-400 shrink-0">{{ hex(cell.addr) }}</span>
-        <span :class="valueClass(cell)">{{ cell.uninit ? '. xxxxxxxx' : hex(cell.value) }}</span>
+        <span class="text-gray-400 shrink-0">{{ hexU32(cell.addr) }}</span>
+        <span :class="valueClass(cell)">{{ cell.uninit ? '. xxxxxxxx' : hexU32(cell.value) }}</span>
         <span :class="labelClass(cell)">{{ cell.label }}</span>
         <span v-if="cell.isSP" class="text-orange-400 text-xs ml-auto shrink-0">← SP</span>
       </div>
@@ -22,6 +22,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
+import { hexU32 } from '@/core/simulator'
 
 const { currentState, prevState } = useSimulator()
 
@@ -99,7 +100,4 @@ function labelClass(cell: Cell): string {
   return 'text-gray-400 text-xs ml-2'
 }
 
-function hex(v: number): string {
-  return `0x${v.toString(16).padStart(8, '0')}`
-}
 </script>

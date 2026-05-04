@@ -60,6 +60,10 @@ export function buildStates(preset: { initialState: MachineState; steps: { updat
   return states
 }
 
+export function hexU32(v: number): string {
+  return `0x${v.toString(16).padStart(8, '0')}`
+}
+
 export function isAddressLike(val: number, arch: 'x86' | 'arm'): boolean {
   if (arch === 'x86') return val >= 0x7ff000 && val <= 0x800000
   return val >= 0x20007000 && val <= 0x20009000

@@ -3,7 +3,7 @@
     <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">特殊レジスタ</div>
     <div class="p-2 space-y-1 font-mono text-xs">
       <RegRow label="SP" :value="state.sp" :prev="prev?.sp" :changed="state.sp !== prev?.sp" kind="orange" />
-      <RegRow label="FP" :value="state.fp" :prev="prev?.fp" :changed="state.fp !== prev?.fp" kind="normal" />
+      <RegRow label="FP" :value="fpValue" :prev="prevFpValue" :changed="fpValue !== prevFpValue" kind="normal" />
       <RegRow v-if="arch === 'arm'" label="LR" :value="state.lr" :prev="prev?.lr" :changed="state.lr !== prev?.lr" :kind="isExcReturn ? 'exc' : 'normal'" />
       <RegRow label="PC" :value="displayPc" :changed="displayPcChanged" kind="normal" />
 
@@ -31,8 +31,18 @@
 <script setup lang="ts">
 import { computed, defineComponent, h } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
+import { hexU32 } from '@/core/simulator'
 
 const { arch, currentState: state, prevState: prev, displayPc, displayPcChanged } = useSimulator()
+
+// ARM では r11 が実際のフレームポインタ（interpreter が regs.r11 を更新する）
+// x86 では state.fp をそのまま使う（x86 プリセットが update.fp で更新する）
+const fpValue = computed(() =>
+  arch.value === 'arm' ? (state.value.regs['r11'] ?? 0) : state.value.fp,
+)
+const prevFpValue = computed(() =>
+  arch.value === 'arm' ? (prev.value?.regs['r11'] ?? 0) : (prev.value?.fp ?? 0),
+)
 
 const EXC_RETURN = 0xfffffff9
 
@@ -60,7 +70,7 @@ const RegRow = defineComponent({
   setup(props) {
     return () => {
       const val = props.value ?? 0
-      const hex = `0x${val.toString(16).padStart(8, '0')}`
+      const hex = hexU32(val)
       const isOrange = props.kind === 'orange'
       const isExc = props.kind === 'exc'
       const changed = props.changed

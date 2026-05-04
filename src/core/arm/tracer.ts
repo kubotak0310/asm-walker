@@ -1,6 +1,7 @@
 // ARM program tracer: dynamically executes parsed instructions and collects state snapshots
 
 import type { MachineState, StepData, AsmLine } from '../types'
+import { BASE_PC_ARM } from '../types'
 import { applyUpdate } from '../simulator'
 import type { ParseResult } from './parser'
 import { interpretInstruction } from './interpreter'
@@ -12,7 +13,7 @@ export interface TraceResult {
   error?: string
 }
 
-const BASE_PC = 0x08000000
+const BASE_PC = BASE_PC_ARM
 
 export function traceProgram(
   parseResult: ParseResult,

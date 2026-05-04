@@ -1,6 +1,8 @@
 // ARM instruction interpreter: ParsedInstruction + MachineState → StateUpdate + metadata
 
 import type { MachineState, StateUpdate, Phase, StackFrame, StackMeta, Flags } from '../types'
+import { BASE_PC_ARM } from '../types'
+import { hexU32 } from '../simulator'
 import type { ParsedInstruction, Operand } from './parser'
 
 export interface InterpretResult {
@@ -13,12 +15,12 @@ export interface InterpretResult {
   nextInstrIdx: number
 }
 
-const BASE_PC = 0x08000000
+const BASE_PC = BASE_PC_ARM
 const FRAME_COLORS: Array<'purple' | 'green' | 'orange'> = ['purple', 'green', 'orange']
 const ADDR_REGS = new Set(['sp', 'lr', 'pc', 'fp'])
 
 function fmtVal(regName: string, val: number): string {
-  if (ADDR_REGS.has(regName)) return `0x${val.toString(16).padStart(8, '0')}`
+  if (ADDR_REGS.has(regName)) return hexU32(val)
   return `0x${val.toString(16)}`
 }
 
@@ -355,7 +357,7 @@ export function interpretInstruction(
       return {
         update,
         explain: `メモリからロード${src.writeBack ? '（ライトバック）' : src.postIndex !== undefined ? '（ポストインデックス）' : ''}`,
-        effect: `${opLabel(dst)} = [0x${addr.toString(16).padStart(8, '0')}] = 0x${val.toString(16)}`,
+        effect: `${opLabel(dst)} = [${hexU32(addr)}] = 0x${val.toString(16)}`,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -377,7 +379,7 @@ export function interpretInstruction(
       return {
         update,
         explain: `メモリにストア${dst.writeBack ? '（ライトバック）' : dst.postIndex !== undefined ? '（ポストインデックス）' : ''}`,
-        effect: `[0x${addr.toString(16).padStart(8, '0')}] = 0x${val.toString(16)}`,
+        effect: `[${hexU32(addr)}] = 0x${val.toString(16)}`,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -401,7 +403,7 @@ export function interpretInstruction(
       return {
         update: { sp: newSp, stackSet, metaSet, frames, pc: BASE_PC + defaultNext * 4 },
         explain: `レジスタをスタックに保存`,
-        effect: `SP = 0x${newSp.toString(16).padStart(8, '0')}`,
+        effect: `SP = ${hexU32(newSp)}`,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -440,7 +442,7 @@ export function interpretInstruction(
       return {
         update,
         explain: `スタックからレジスタを復元`,
-        effect: `SP = 0x${sp.toString(16).padStart(8, '0')}`,
+        effect: `SP = ${hexU32(sp)}`,
         phase: retPhase ? 'ret' : phase,
         nextInstrIdx: nextIdx,
       }
@@ -465,7 +467,7 @@ export function interpretInstruction(
       return {
         update: { pc: BASE_PC + target * 4 },
         explain: `分岐`,
-        effect: `PC = 0x${(BASE_PC + target * 4).toString(16).padStart(8, '0')}`,
+        effect: `PC = ${hexU32(BASE_PC + target * 4)}`,
         phase, nextInstrIdx: target,
       }
     }
@@ -482,7 +484,7 @@ export function interpretInstruction(
       return {
         update: { lr: retAddr, frames: [...state.frames, newFrame], pc: targetAddr },
         explain: `関数呼び出し（LRに戻りアドレスを保存）`,
-        effect: `LR = 0x${retAddr.toString(16).padStart(8, '0')}, PC → ${labelOp.name}`,
+        effect: `LR = ${hexU32(retAddr)}, PC → ${labelOp.name}`,
         phase, nextInstrIdx: target,
       }
     }
@@ -498,7 +500,7 @@ export function interpretInstruction(
       return {
         update: { frames, pc: lrVal },
         explain: `レジスタにジャンプ（関数復帰）`,
-        effect: `PC = ${reg.name.toUpperCase()} = 0x${lrVal.toString(16).padStart(8, '0')}`,
+        effect: `PC = ${reg.name.toUpperCase()} = ${hexU32(lrVal)}`,
         phase: 'ret', nextInstrIdx: nextIdx,
       }
     }

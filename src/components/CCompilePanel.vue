@@ -107,15 +107,10 @@
             {{ compilerId.includes('arm') ? 'ARM' : 'x86-64' }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}
           </span>
         </div>
-        <!-- Errors -->
-        <div v-if="errors.length > 0" class="space-y-0.5">
-          <div
-            v-for="(err, i) in errors"
-            :key="i"
-            class="text-red-400 text-xs font-mono bg-red-900/20 px-2 py-1 rounded whitespace-pre-wrap"
-          >
-            ⚠ {{ err }}
-          </div>
+        <!-- gcc raw output（エラー時 + 警告あり時） -->
+        <div v-if="gccOutput" class="rounded overflow-hidden border border-gray-600">
+          <div class="px-2 py-1 bg-gray-700 text-gray-400 text-xs">コンパイラ出力 (gcc stderr)</div>
+          <pre class="text-xs font-mono bg-gray-900 text-gray-200 px-3 py-2 overflow-auto max-h-48 whitespace-pre-wrap leading-relaxed">{{ gccOutput }}</pre>
         </div>
       </div>
     </div>
@@ -127,74 +122,14 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { cpp } from '@codemirror/lang-cpp'
+import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
+import { tags } from '@lezer/highlight'
 import { useSimulator } from '@/composables/useSimulator'
 
-const { simulateCompiled, compileError, isCompiling, setArch, currentStepData, preset, currentState, arch, currentStep } = useSimulator()
-
-// ── return命令検出 ──────────────────────────────────────────
-const isReturnStep = computed(() => {
-  const step = currentStepData.value
-  if (!step || step.asmLine < 0) return false
-  const text = (preset.value?.asmCode[step.asmLine]?.text ?? '').trim().toLowerCase()
-  return (text.startsWith('bx') && text.includes('lr')) ||
-    (text.startsWith('pop') && text.includes('pc')) ||
-    (text.startsWith('ldm') && text.includes('pc'))
-})
-
-const currentFuncName = computed(() => {
-  const frames = currentState.value.frames
-  return frames[frames.length - 1]?.name ?? 'main'
-})
-
-const returnVal = computed(() => arch.value === 'x86' ? (currentState.value.regs['rax'] ?? 0) : (currentState.value.regs['r0'] ?? 0))
-const returnHex = computed(() => `0x${returnVal.value.toString(16).padStart(8, '0')}`)
-const returnDec = computed(() => returnVal.value.toString(10))
-
-// ── bl命令検出 + 引数表示 ────────────────────────────────────
-const callTarget = computed<string | null>(() => {
-  const step = currentStepData.value
-  if (!step || step.asmLine < 0) return null
-  const text = (preset.value?.asmCode[step.asmLine]?.text ?? '').trim().toLowerCase()
-  const m = text.match(/^blx?\s+(\w+)/)
-  if (!m || !m[1]) return null
-  if (/^(r\d+|sp|lr|pc|fp|ip|sl)$/.test(m[1])) return null
-  return m[1]
-})
-
-function parseArgCount(funcName: string, cCode: string[]): number | null {
-  const escaped = funcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`\\b${escaped}\\s*\\(([^)]*)\\)`)
-  for (const line of cCode) {
-    const m = re.exec(line)
-    if (!m || m[1] === undefined) continue
-    const before = line.slice(0, m.index).trim()
-    if (/\breturn\b|[=,(]/.test(before)) continue
-    const params = m[1].trim()
-    if (params === '' || params === 'void') return 0
-    if (params.includes('...') || params.includes('(')) return null
-    return params.split(',').length
-  }
-  return null
-}
-
-const callArgCount = computed<number | null>(() => {
-  const name = callTarget.value
-  if (!name) return null
-  const cCode = preset.value?.cCode ?? []
-  if (!cCode.length) return null
-  return parseArgCount(name, cCode)
-})
-
-// "add(r0=3, r1=5)" 形式の文字列
-const callDisplay = computed<string | null>(() => {
-  const name = callTarget.value
-  if (!name) return null
-  const count = callArgCount.value
-  if (count === null) return `${name}()`
-  const argRegs = ['r0', 'r1', 'r2', 'r3']
-  const args = argRegs.slice(0, count).map(r => `${r}=${currentState.value.regs[r] ?? 0}`)
-  return `${name}(${args.join(', ')})`
-})
+const {
+  simulateCompiled, compileError, isCompiling, setArch, currentStep, gccOutput,
+  isReturnStep, currentFuncName, returnHex, returnDec, callTarget, callDisplay,
+} = useSimulator()
 
 const editorEl = ref<HTMLElement | null>(null)
 const compilerId = ref('carm1121')
@@ -254,6 +189,21 @@ int main() {
 
 const DEFAULT_TEXT = SAMPLES.add
 
+const cHighlight = HighlightStyle.define([
+  { tag: tags.keyword,                    color: '#60a5fa', fontWeight: 'bold' }, // int, return, if ...
+  { tag: tags.typeName,                   color: '#34d399' },                     // type identifiers
+  { tag: tags.comment,                    color: '#6b7280', fontStyle: 'italic' },
+  { tag: tags.string,                     color: '#fbbf24' },
+  { tag: tags.number,                     color: '#f472b6' },
+  { tag: tags.operator,                   color: '#a78bfa' },
+  { tag: tags.punctuation,                color: '#94a3b8' },
+  { tag: tags.function(tags.variableName), color: '#38bdf8' },                    // function calls
+  { tag: tags.definition(tags.variableName), color: '#e2e8f0' },                 // definitions
+  { tag: tags.variableName,              color: '#e2e8f0' },
+  { tag: tags.macroName,                  color: '#fb923c' },                     // #define etc.
+  { tag: tags.bool,                       color: '#f472b6' },
+])
+
 onMounted(() => {
   view = new EditorView({
     doc: DEFAULT_TEXT,
@@ -261,14 +211,15 @@ onMounted(() => {
       basicSetup,
       cpp(),
       EditorView.theme({
-        '&': { backgroundColor: '#1f2937', color: '#d1d5db' },
-        '.cm-content': { fontFamily: 'monospace', fontSize: '13px' },
-        '.cm-gutters': { backgroundColor: '#111827', color: '#6b7280', borderRight: '1px solid #374151' },
+        '&': { backgroundColor: '#1f2937', color: '#e2e8f0' },
+        '.cm-content': { fontFamily: 'monospace', fontSize: '15px', lineHeight: '1.6' },
+        '.cm-gutters': { backgroundColor: '#111827', color: '#6b7280', borderRight: '1px solid #374151', fontSize: '14px' },
         '.cm-activeLineGutter': { backgroundColor: '#1e293b' },
         '.cm-activeLine': { backgroundColor: '#1e293b' },
         '.cm-cursor': { borderLeftColor: '#60a5fa' },
         '.cm-selectionBackground, ::selection': { backgroundColor: '#374151 !important' },
       }),
+      syntaxHighlighting(cHighlight),
     ],
     parent: editorEl.value!,
   })

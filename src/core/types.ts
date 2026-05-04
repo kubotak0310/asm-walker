@@ -79,6 +79,7 @@ export interface PresetData {
 
 export const BASE_SP_X86 = 0x7fff00
 export const BASE_SP_ARM = 0x20008000
+export const BASE_PC_ARM = 0x08000000
 
 export const PHASE_COLORS: Record<Phase, string> = {
   main: 'purple',

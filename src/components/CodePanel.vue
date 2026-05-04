@@ -6,7 +6,7 @@
         v-if="activeAsmLine >= 0 && lineAddrs[activeAsmLine] !== undefined"
         class="text-xs font-mono bg-yellow-900/60 text-yellow-200 px-2 py-0.5 rounded"
       >
-        PC → {{ hexAddr(lineAddrs[activeAsmLine]!) }}
+        PC → {{ hexU32(lineAddrs[activeAsmLine]!) }}
       </span>
       <span v-else-if="activeAsmLine < 0 && currentStepData?.type === 'hw'" class="text-xs text-orange-400">
         PC → HW処理中
@@ -35,7 +35,7 @@
                 'shrink-0 w-22 text-right pr-2',
                 unreachableInfo.lines.has(i) ? 'text-gray-700' : activeAsmLine === i ? 'text-yellow-300 font-bold' : 'text-gray-400'
               ]"
-            >{{ lineAddrs[i] !== undefined ? hexAddr(lineAddrs[i]!) : '' }}</span>
+            >{{ lineAddrs[i] !== undefined ? hexU32(lineAddrs[i]!) : '' }}</span>
 
             <span
               :class="[
@@ -73,6 +73,8 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
+import { BASE_PC_ARM } from '@/core/types'
+import { hexU32 } from '@/core/simulator'
 import type { AsmLine, Phase } from '@/core/types'
 
 const { preset, currentStepData } = useSimulator()
@@ -123,8 +125,6 @@ const unreachableInfo = computed(() => {
 const lineAddrs = computed<Record<number, number>>(() => {
   const p = preset.value
   if (!p) return {}
-  const BASE_PC = 0x08000000
-
   // Build address map from step execution (for x86 presets with non-sequential PCs)
   const stepAddrMap: Record<number, number> = {}
   let prevPc = p.initialState.pc
@@ -144,15 +144,11 @@ const lineAddrs = computed<Record<number, number>>(() => {
   for (let i = 0; i < p.asmCode.length; i++) {
     const line = p.asmCode[i]
     if (!line || line.isHeader || !line.text.trim()) continue
-    result[i] = stepAddrMap[i] ?? BASE_PC + instrIdx * 4
+    result[i] = stepAddrMap[i] ?? BASE_PC_ARM + instrIdx * 4
     instrIdx++
   }
   return result
 })
-
-function hexAddr(v: number): string {
-  return `0x${v.toString(16).padStart(8, '0')}`
-}
 
 function outerLineClass(line: AsmLine, i: number): string[] {
   if (line.isHeader) return ['px-2 py-0.5']

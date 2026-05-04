@@ -30,7 +30,7 @@
 
       <!-- Stack usage bar -->
       <div v-if="frames.length > 0" class="pt-2 border-t border-gray-700">
-        <div class="flex justify-between text-xs text-gray-500 mb-1">
+        <div class="flex justify-between text-xs text-gray-400 mb-1">
           <span>スタック使用量</span>
           <span>{{ totalUsage }} bytes</span>
         </div>

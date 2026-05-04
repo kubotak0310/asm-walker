@@ -46,10 +46,10 @@
 
       <!-- Top: C source (4/12) + Assembly (8/12) -->
       <div class="grid grid-cols-12 gap-3">
-        <div v-if="inputMode === 'preset' || inputMode === 'compile'" class="col-span-12 lg:col-span-4">
+        <div v-if="showCSource" class="col-span-12 lg:col-span-4">
           <CSourcePanel />
         </div>
-        <div :class="inputMode === 'free' ? 'col-span-12' : 'col-span-12 lg:col-span-8'">
+        <div :class="showCSource ? 'col-span-12 lg:col-span-8' : 'col-span-12'">
           <CodePanel />
         </div>
       </div>
@@ -65,10 +65,10 @@
         <div class="col-span-12 md:col-span-2">
           <SpecialRegPanel />
         </div>
-        <div class="col-span-12 md:col-span-3">
+        <div class="col-span-12 md:col-span-4">
           <StackPanel />
         </div>
-        <div class="col-span-12 md:col-span-3">
+        <div class="col-span-12 md:col-span-2">
           <FrameViz />
         </div>
       </div>
@@ -96,5 +96,15 @@ import FreeInputPanel from '@/components/FreeInputPanel.vue'
 import CCompilePanel from '@/components/CCompilePanel.vue'
 import { useSimulator } from '@/composables/useSimulator'
 
-const { inputMode, setInputMode } = useSimulator()
+import { computed } from 'vue'
+
+const { inputMode, setInputMode, preset } = useSimulator()
+
+// CSourcePanel を表示する条件:
+// - プリセットモード（常に）
+// - コンパイルモード かつ コンパイル済み（preset.id === 'compile'）
+const showCSource = computed(() =>
+  inputMode.value === 'preset' ||
+  (inputMode.value === 'compile' && preset.value?.id === 'compile')
+)
 </script>

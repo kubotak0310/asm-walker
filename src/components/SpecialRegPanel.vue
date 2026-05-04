@@ -9,7 +9,7 @@
 
       <!-- Flags -->
       <div class="pt-1 border-t border-gray-700 mt-1">
-        <div class="text-gray-500 mb-1">フラグ</div>
+        <div class="text-gray-400 mb-1">フラグ</div>
         <div class="flex gap-2 flex-wrap">
           <FlagBit v-for="f in flags" :key="f.name" :name="f.name" :value="f.value" :changed="f.changed" />
         </div>
@@ -18,7 +18,7 @@
       <!-- Mode (ARM only) -->
       <div v-if="arch === 'arm'" class="pt-1 border-t border-gray-700 mt-1">
         <div class="flex items-center gap-2">
-          <span class="text-gray-500">Mode:</span>
+          <span class="text-gray-400">Mode:</span>
           <span :class="state.mode === 'handler' ? 'text-orange-300 font-bold' : 'text-green-300'">
             {{ state.mode === 'handler' ? 'Handler Mode (IRQ中)' : 'Thread Mode' }}
           </span>
@@ -95,7 +95,7 @@ const FlagBit = defineComponent({
     return () => h('div', {
       class: [
         'px-1.5 py-0.5 rounded text-xs font-mono',
-        props.changed ? 'bg-yellow-800 text-yellow-200' : props.value ? 'bg-gray-600 text-gray-200' : 'bg-gray-800 text-gray-600',
+        props.changed ? 'bg-yellow-800 text-yellow-200' : props.value ? 'bg-gray-600 text-gray-200' : 'bg-gray-800 text-gray-400',
       ],
     }, `${props.name}=${props.value ? '1' : '0'}`)
   },

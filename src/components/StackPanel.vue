@@ -10,7 +10,7 @@
         :key="cell.addr"
         :class="rowClass(cell)"
       >
-        <span class="text-gray-500 shrink-0">{{ hex(cell.addr) }}</span>
+        <span class="text-gray-400 shrink-0">{{ hex(cell.addr) }}</span>
         <span :class="valueClass(cell)">{{ cell.uninit ? '. xxxxxxxx' : hex(cell.value) }}</span>
         <span :class="labelClass(cell)">{{ cell.label }}</span>
         <span v-if="cell.isSP" class="text-orange-400 text-xs ml-auto shrink-0">← SP</span>
@@ -76,7 +76,7 @@ function rowClass(cell: Cell): string[] {
     cell.frameColor === 'orange' ? 'border-l-2 border-orange-500' :
                                    'border-l-2 border-transparent'
   return [
-    'flex gap-2 items-center px-2 py-0.5 rounded',
+    'flex gap-6 items-center px-2 py-0.5 rounded',
     borderColor,
     cell.isSP ? 'bg-orange-900/40' : cell.isNew ? 'bg-gray-700' : '',
   ]
@@ -96,7 +96,7 @@ function labelClass(cell: Cell): string {
   if (cell.kind === 'ptr') return 'text-purple-400 text-xs ml-2'
   if (cell.kind === 'arr') return 'text-green-400 text-xs ml-2'
   if (cell.kind === 'hw') return 'text-orange-400 text-xs ml-2'
-  return 'text-gray-500 text-xs ml-2'
+  return 'text-gray-400 text-xs ml-2'
 }
 
 function hex(v: number): string {

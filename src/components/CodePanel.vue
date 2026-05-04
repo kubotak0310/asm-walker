@@ -33,7 +33,7 @@
             <span
               :class="[
                 'shrink-0 w-22 text-right pr-2',
-                unreachableInfo.lines.has(i) ? 'text-gray-700' : activeAsmLine === i ? 'text-yellow-300 font-bold' : 'text-gray-600'
+                unreachableInfo.lines.has(i) ? 'text-gray-700' : activeAsmLine === i ? 'text-yellow-300 font-bold' : 'text-gray-400'
               ]"
             >{{ lineAddrs[i] !== undefined ? hexAddr(lineAddrs[i]!) : '' }}</span>
 
@@ -183,7 +183,7 @@ function phaseColor(phase?: Phase): string {
     isr: 'text-green-400',
     ret: 'text-red-400',
   }
-  return `${map[phase ?? ''] ?? 'text-gray-500'} text-xs`
+  return `${map[phase ?? ''] ?? 'text-gray-400'} text-xs`
 }
 
 watch(activeAsmLine, async (line) => {

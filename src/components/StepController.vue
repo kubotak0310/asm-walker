@@ -33,9 +33,9 @@
       </button>
     </div>
 
-    <!-- C案: 関数リターン時の戻り値バナー -->
+    <!-- C案: 関数リターン時の戻り値バナー（コンパイルモードは CCompilePanel バーで代替） -->
     <div
-      v-if="isReturnStep"
+      v-if="isReturnStep && inputMode !== 'compile'"
       class="flex items-center gap-2 px-3 py-1.5 rounded bg-green-900/40 border border-green-700/50 font-mono text-xs"
     >
       <span class="text-green-400 font-bold">✅ {{ currentFuncName }}() 実行完了</span>
@@ -52,7 +52,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
 
-const { currentStep, totalSteps, isFirst, isLast, guideOpen, prevStep, nextStep, reset, toggleGuide, currentState, arch, currentStepData, preset } = useSimulator()
+const { currentStep, totalSteps, isFirst, isLast, guideOpen, prevStep, nextStep, reset, toggleGuide, currentState, arch, currentStepData, preset, inputMode } = useSimulator()
 
 // return命令を検出: bx lr / pop {..., pc} / ldm ..., {..., pc}
 const isReturnStep = computed(() => {

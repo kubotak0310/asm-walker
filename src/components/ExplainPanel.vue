@@ -7,15 +7,15 @@
         <span class="text-orange-200 text-sm font-bold">ハードウェアが自動実行 — アセンブラ命令は存在しません</span>
       </div>
       <p class="text-gray-200 text-sm">{{ step.explain }}</p>
-      <p class="text-gray-400 text-xs font-mono">→ {{ step.effect }}</p>
+      <p class="text-gray-300 text-xs font-mono">→ {{ step.effect }}</p>
     </div>
 
     <!-- SWステップ -->
     <div v-else-if="step" class="space-y-2">
       <div class="flex items-center gap-2 flex-wrap">
         <code class="bg-gray-900 text-green-300 px-2 py-0.5 rounded text-sm font-mono">{{ step.instr }}</code>
-        <span v-if="step.syntax" class="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded font-mono">FORMAT</span>
-        <code v-if="step.syntax" class="text-gray-400 text-xs font-mono">{{ step.syntax }}</code>
+        <span v-if="step.syntax" class="text-xs bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded font-mono">FORMAT</span>
+        <code v-if="step.syntax" class="text-gray-300 text-xs font-mono">{{ step.syntax }}</code>
         <!-- 構文記法ヘルプ -->
         <div v-if="step.syntax" ref="helpWrapRef" class="relative inline-block">
           <button
@@ -43,7 +43,7 @@
       </div>
       <p v-if="step.fullName" class="text-blue-400 text-xs font-mono font-bold tracking-widest uppercase">{{ step.fullName }}</p>
       <p class="text-gray-200 text-sm">{{ step.explain }}</p>
-      <p class="text-gray-400 text-xs font-mono">→ {{ step.effect }}</p>
+      <p class="text-gray-300 text-xs font-mono">→ {{ step.effect }}</p>
 
       <div v-if="step.isPtr" class="bg-purple-900/30 border border-purple-800 rounded p-2 text-xs text-purple-200">
         💡 ポインタ操作: アドレス値の取得・設定・間接参照が含まれます

@@ -1,7 +1,7 @@
 <template>
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
     <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">汎用レジスタ</div>
-    <div class="p-2 grid grid-cols-2 gap-1 font-mono text-xs">
+    <div class="p-2 grid grid-cols-2 gap-y-1 gap-x-6 font-mono text-xs">
       <div
         v-for="reg in registers"
         :key="reg.name"
@@ -125,7 +125,7 @@ function cellClass(name: string, val: number): string {
 function labelClass(name: string): string {
   if (isReturnStep.value && name === returnReg.value) return 'text-yellow-300 font-bold'
   if (argBadgeIndex(name) !== null) return 'text-blue-300 font-bold'
-  return changed(name) ? 'text-white font-bold' : 'text-gray-400'
+  return changed(name) ? 'text-white font-bold' : 'text-gray-300'
 }
 
 function valueClass(name: string, val: number): string {

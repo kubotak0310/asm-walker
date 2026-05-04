@@ -46,10 +46,11 @@
         <div class="flex items-center gap-2 ml-auto flex-wrap">
           <!-- Sample selector -->
           <select
+            v-model="selectedSampleId"
             class="bg-gray-600 text-gray-200 text-xs rounded px-2 py-1 border border-gray-500"
             @change="onSampleSelect"
           >
-            <option value="">サンプルを読み込む...</option>
+            <option value="" disabled hidden>サンプルを選択してください...</option>
             <option v-for="s in ARM_SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
           <!-- Compiler selector -->
@@ -133,6 +134,7 @@ const editorEl = ref<HTMLElement | null>(null)
 const compilerId = ref('carm1121')
 const optLevel = ref('-O0')
 const extraFlags = ref('-mcpu=cortex-m3 -mthumb')
+const selectedSampleId = ref('')
 const errors = ref<string[]>([])
 const hasResult = ref(false)
 let view: EditorView | null = null
@@ -191,17 +193,14 @@ watch(compileError, (err) => {
   errors.value = err ? err.split('\n').filter(Boolean) : []
 })
 
-function onSampleSelect(e: Event) {
-  const id = (e.target as HTMLSelectElement).value
-  if (!id || !view) return
-  const s = ARM_SAMPLES.find(s => s.id === id)
-  if (!s) return
+function onSampleSelect() {
+  const s = ARM_SAMPLES.find(s => s.id === selectedSampleId.value)
+  if (!s || !view) return
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s.cCode } })
   compilerId.value = s.compilerId
   optLevel.value = s.optLevel
   extraFlags.value = s.extraFlags
   onCompilerChange()
-  ;(e.target as HTMLSelectElement).value = ''
   errors.value = []
 }
 

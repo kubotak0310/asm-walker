@@ -18,6 +18,7 @@ export function traceProgram(
   parseResult: ParseResult,
   initialState: MachineState,
   maxSteps = 200,
+  cLineMap?: Map<number, number>,
 ): TraceResult {
   const { instructions, labels, sourceLines } = parseResult
   const instrCount = instructions.length
@@ -81,7 +82,7 @@ export function traceProgram(
       type: 'sw',
       phase,
       asmLine: instr.lineIndex,
-      cLine: 0,
+      cLine: cLineMap?.get(instr.lineIndex) ?? 0,
       explain,
       effect,
       isPtr,

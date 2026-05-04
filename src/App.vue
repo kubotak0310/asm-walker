@@ -24,6 +24,11 @@
               class="px-3 py-1 transition-colors"
               @click="setInputMode('free')"
             >自由入力</button>
+            <button
+              :class="inputMode === 'compile' ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
+              class="px-3 py-1 transition-colors"
+              @click="setInputMode('compile')"
+            >C コンパイル</button>
           </div>
           <PresetSelector v-if="inputMode === 'preset'" />
         </div>
@@ -36,9 +41,12 @@
       <!-- Free-input editor (full width, free mode only) -->
       <FreeInputPanel v-if="inputMode === 'free'" />
 
+      <!-- C compile editor (full width, compile mode only) -->
+      <CCompilePanel v-if="inputMode === 'compile'" />
+
       <!-- Top: C source (4/12) + Assembly (8/12) -->
       <div class="grid grid-cols-12 gap-3">
-        <div v-if="inputMode === 'preset'" class="col-span-12 lg:col-span-4">
+        <div v-if="inputMode === 'preset' || inputMode === 'compile'" class="col-span-12 lg:col-span-4">
           <CSourcePanel />
         </div>
         <div :class="inputMode === 'free' ? 'col-span-12' : 'col-span-12 lg:col-span-8'">
@@ -85,6 +93,7 @@ import StackPanel from '@/components/StackPanel.vue'
 import FrameViz from '@/components/FrameViz.vue'
 import DiffPanel from '@/components/DiffPanel.vue'
 import FreeInputPanel from '@/components/FreeInputPanel.vue'
+import CCompilePanel from '@/components/CCompilePanel.vue'
 import { useSimulator } from '@/composables/useSimulator'
 
 const { inputMode, setInputMode } = useSimulator()

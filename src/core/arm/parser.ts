@@ -10,9 +10,9 @@ export interface ParsedInstruction {
 }
 
 export type Operand =
-  | { type: 'reg'; name: string }
+  | { type: 'reg'; name: string; shift?: { op: 'LSL' | 'LSR' | 'ASR' | 'ROR'; amount: number } }
   | { type: 'imm'; value: number }
-  | { type: 'mem'; base: string; offset: number }
+  | { type: 'mem'; base: string; offset: number; writeBack?: boolean; postIndex?: number }
   | { type: 'reglist'; regs: string[] }
   | { type: 'label'; name: string }
 
@@ -45,6 +45,9 @@ const REG_ALIASES: Record<string, string> = {
   SP: 'sp', R13: 'sp',
   LR: 'lr', R14: 'lr',
   PC: 'pc', R15: 'pc',
+  FP: 'r11', R11: 'r11',
+  SL: 'r10', R10: 'r10',
+  IP: 'r12', R12: 'r12',
 }
 
 export function normalizeReg(raw: string): string {
@@ -130,14 +133,28 @@ function parseOperandStr(s: string): Operand | null {
   if (t.startsWith('[')) {
     const close = t.indexOf(']')
     if (close < 0) return null
-    const parts = t.slice(1, close).split(',').map(p => p.trim())
+    const inner = t.slice(1, close)
+    const after = t.slice(close + 1).trim()
+    const parts = inner.split(',').map(p => p.trim())
     const base = normalizeReg(parts[0] ?? '')
     const offset = parts[1] ? parseImmediate(parts[1]) : 0
+    if (after === '!') return { type: 'mem', base, offset, writeBack: true }
+    if (after.startsWith(',')) return { type: 'mem', base, offset: 0, postIndex: parseImmediate(after.slice(1)) }
     return { type: 'mem', base, offset }
   }
 
   if (t.startsWith('#') || /^-?\d/.test(t)) {
     return { type: 'imm', value: parseImmediate(t) }
+  }
+
+  // Shifted register: "r1,LSL #2" or "r1, lsl #2" (fused from splitByComma post-processing)
+  const shiftFused = t.match(/^([A-Za-z][A-Za-z0-9]*)\s*,\s*(LSL|LSR|ASR|ROR)\s+#(\d+)$/i)
+  if (shiftFused && isRegStr(shiftFused[1] ?? '')) {
+    return {
+      type: 'reg',
+      name: normalizeReg(shiftFused[1] ?? ''),
+      shift: { op: (shiftFused[2] ?? '').toUpperCase() as 'LSL' | 'LSR' | 'ASR' | 'ROR', amount: parseInt(shiftFused[3] ?? '0', 10) },
+    }
   }
 
   if (isRegStr(t)) return { type: 'reg', name: normalizeReg(t) }
@@ -221,7 +238,17 @@ export function parseARM(text: string): ParseResult {
         const op = parseOperandStr(opStr)
         if (op) operands.push(op)
       } else {
-        for (const part of splitByComma(opStr)) {
+        // Merge shift specifiers (LSL/LSR/ASR/ROR) into the preceding part
+        const rawParts = splitByComma(opStr)
+        const fusedParts: string[] = []
+        for (const part of rawParts) {
+          if (/^(LSL|LSR|ASR|ROR)\s/i.test(part.trim()) && fusedParts.length > 0) {
+            fusedParts[fusedParts.length - 1] += ',' + part
+          } else {
+            fusedParts.push(part)
+          }
+        }
+        for (const part of fusedParts) {
           const op = parseOperandStr(part)
           if (op) operands.push(op)
           else errors.push({ line: lineIndex, message: `不明なオペランド: ${part.trim()}` })

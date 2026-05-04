@@ -9,6 +9,8 @@ import { armGuides } from '@/guides/arm'
 import type { GuideData } from '@/guides/x86'
 import { parseARM } from '@/core/arm/parser'
 import { traceProgram } from '@/core/arm/tracer'
+import { adaptGodboltResponse } from '@/core/compiler'
+import type { GodboltResponse } from '@/core/compiler'
 
 const arch = ref<Arch>('arm')
 const currentPresetId = ref('funcCall')
@@ -17,8 +19,10 @@ const guideOpen = ref(false)
 const diffOpen = ref(false)
 const states = ref<MachineState[]>([])
 const preset = ref<PresetData | null>(null)
-const inputMode = ref<'preset' | 'free'>('preset')
+const inputMode = ref<'preset' | 'free' | 'compile'>('preset')
 const freeInputError = ref<string | null>(null)
+const compileError = ref<string | null>(null)
+const isCompiling = ref<boolean>(false)
 
 const FREE_INPUT_INITIAL_STATE: MachineState = {
   regs: { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, r6: 0, r7: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0 },
@@ -81,7 +85,7 @@ function toggleDiff() {
   diffOpen.value = !diffOpen.value
 }
 
-function setInputMode(mode: 'preset' | 'free') {
+function setInputMode(mode: 'preset' | 'free' | 'compile') {
   inputMode.value = mode
   if (mode === 'preset') {
     loadPreset(arch.value, currentPresetId.value)
@@ -104,9 +108,77 @@ function simulateFreeInput(asmText: string) {
     cCode: [],
     asmCode: result.asmLines,
     steps: result.steps,
-    initialState: FREE_INPUT_INITIAL_STATE,
+    initialState: result.states[0] ?? FREE_INPUT_INITIAL_STATE,
   }
   currentStep.value = 0
+}
+
+async function simulateCompiled(cSource: string, compilerId: string, optLevel: string) {
+  isCompiling.value = true
+  compileError.value = null
+  try {
+    // 開発時は Godbolt に直接 POST（CORS が通る場合）、本番は自前プロキシ経由
+    const isDev = import.meta.env.DEV
+    const res = await fetch(
+      isDev
+        ? `https://godbolt.org/api/compiler/${compilerId}/compile`
+        : '/api/compile',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: isDev
+          ? JSON.stringify({ source: cSource, options: { userArguments: optLevel } })
+          : JSON.stringify({ compilerId, source: cSource, options: { userArguments: optLevel } }),
+      },
+    )
+    const data = await res.json() as GodboltResponse
+    const output = adaptGodboltResponse(data)
+    if (output.error) {
+      compileError.value = output.error
+      return
+    }
+
+    const isArm = compilerId.includes('arm')
+    arch.value = isArm ? 'arm' : 'x86'
+    const cSourceLines = cSource.split('\n')
+
+    if (isArm) {
+      const parseResult = parseARM(output.asmText)
+      if (parseResult.errors.length > 0) {
+        compileError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
+        return
+      }
+      const result = traceProgram(parseResult, FREE_INPUT_INITIAL_STATE, 500, output.cLineMap)
+      compileError.value = result.error ?? null
+      states.value = result.states
+      preset.value = {
+        id: 'compile',
+        name: 'Cコンパイル結果',
+        arch: 'arm',
+        cCode: cSourceLines,
+        asmCode: result.asmLines,
+        steps: result.steps,
+        initialState: result.states[0] ?? FREE_INPUT_INITIAL_STATE,
+      }
+    } else {
+      const asmLines = output.rawAsm.map(item => ({ text: item.text, isHeader: false }))
+      states.value = [FREE_INPUT_INITIAL_STATE]
+      preset.value = {
+        id: 'compile',
+        name: 'Cコンパイル結果 (x86)',
+        arch: 'x86',
+        cCode: cSourceLines,
+        asmCode: asmLines,
+        steps: [],
+        initialState: FREE_INPUT_INITIAL_STATE,
+      }
+    }
+    currentStep.value = 0
+  } catch (e) {
+    compileError.value = `ネットワークエラー: ${String(e)}`
+  } finally {
+    isCompiling.value = false
+  }
 }
 
 // Initialize
@@ -173,6 +245,8 @@ export function useSimulator() {
     displayPcChanged,
     inputMode,
     freeInputError,
+    compileError,
+    isCompiling,
     setArch,
     selectPreset,
     nextStep,
@@ -182,5 +256,6 @@ export function useSimulator() {
     toggleDiff,
     setInputMode,
     simulateFreeInput,
+    simulateCompiled,
   }
 }

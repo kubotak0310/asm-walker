@@ -13,50 +13,59 @@
       </span>
     </div>
     <div class="p-2 font-mono text-xs overflow-auto max-h-96" ref="asmCodeEl">
-      <div
-        v-for="(line, i) in preset?.asmCode ?? []"
-        :key="i"
-        :class="outerLineClass(line, i)"
-      >
-        <!-- Section header -->
-        <template v-if="line.isHeader">
-          <span :class="phaseColor(line.phase)">{{ line.text }}</span>
-        </template>
+      <template v-for="(line, i) in preset?.asmCode ?? []" :key="i">
+        <div
+          :data-asm-line="i"
+          :class="outerLineClass(line, i)"
+        >
+          <!-- Section header -->
+          <template v-if="line.isHeader">
+            <span :class="[phaseColor(line.phase), unreachableInfo.lines.has(i) ? 'opacity-40' : '']">{{ line.text }}</span>
+          </template>
 
-        <!-- Empty line -->
-        <template v-else-if="!line.text.trim()">
-          <span class="text-transparent select-none">·</span>
-        </template>
+          <!-- Empty line -->
+          <template v-else-if="!line.text.trim()">
+            <span class="text-transparent select-none">·</span>
+          </template>
 
-        <!-- Executable instruction -->
-        <template v-else>
-          <span
-            :class="[
-              'shrink-0 w-22 text-right pr-2',
-              activeAsmLine === i ? 'text-yellow-300 font-bold' : 'text-gray-600'
-            ]"
-          >{{ lineAddrs[i] !== undefined ? hexAddr(lineAddrs[i]!) : '' }}</span>
-
-          <span
-            :class="[
-              'shrink-0 w-5 text-center',
-              activeAsmLine === i ? (isHW ? 'text-orange-400' : 'text-yellow-400') : 'text-transparent'
-            ]"
-          >▶</span>
-
-          <span :class="instrTextClass(i)">
+          <!-- Executable instruction -->
+          <template v-else>
             <span
-              v-if="currentStepData?.isPtr && activeAsmLine === i"
-              class="bg-purple-800 text-purple-200 px-1 rounded mr-1"
-            >ptr</span>
+              :class="[
+                'shrink-0 w-22 text-right pr-2',
+                unreachableInfo.lines.has(i) ? 'text-gray-700' : activeAsmLine === i ? 'text-yellow-300 font-bold' : 'text-gray-600'
+              ]"
+            >{{ lineAddrs[i] !== undefined ? hexAddr(lineAddrs[i]!) : '' }}</span>
+
             <span
-              v-if="currentStepData?.isArr && activeAsmLine === i"
-              class="bg-green-800 text-green-200 px-1 rounded mr-1"
-            >arr</span>
-            {{ line.text.trim() }}
-          </span>
-        </template>
-      </div>
+              :class="[
+                'shrink-0 w-5 text-center',
+                activeAsmLine === i ? (isHW ? 'text-orange-400' : 'text-yellow-400') : 'text-transparent'
+              ]"
+            >▶</span>
+
+            <span :class="instrTextClass(i)">
+              <span
+                v-if="currentStepData?.isPtr && activeAsmLine === i"
+                class="bg-purple-800 text-purple-200 px-1 rounded mr-1"
+              >ptr</span>
+              <span
+                v-if="currentStepData?.isArr && activeAsmLine === i"
+                class="bg-green-800 text-green-200 px-1 rounded mr-1"
+              >arr</span>
+              {{ line.text.trim() }}
+            </span>
+          </template>
+        </div>
+
+        <!-- Unreachable block end note -->
+        <div
+          v-if="unreachableInfo.blockEnds.has(i)"
+          class="text-xs text-gray-600 italic px-2 py-1 mb-1 border-l-2 border-gray-700"
+        >
+          ↑ この関数はシミュレーション中に実行されません（最適化によりインライン展開された可能性があります）
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -72,10 +81,51 @@ const asmCodeEl = ref<HTMLElement | null>(null)
 const activeAsmLine = computed(() => currentStepData.value?.asmLine ?? -1)
 const isHW = computed(() => currentStepData.value?.type === 'hw')
 
+const executedLines = computed(() => {
+  const set = new Set<number>()
+  for (const step of preset.value?.steps ?? []) {
+    if (step.asmLine >= 0) set.add(step.asmLine)
+  }
+  return set
+})
+
+const unreachableInfo = computed(() => {
+  const p = preset.value
+  if (!p) return { lines: new Set<number>(), blockEnds: new Set<number>() }
+  const executed = executedLines.value
+
+  // Split asmCode into segments separated by section headers
+  const segments: number[][] = []
+  let seg: number[] = []
+  for (let i = 0; i < p.asmCode.length; i++) {
+    const line = p.asmCode[i]
+    if (!line) continue
+    if (line.isHeader && seg.length > 0) { segments.push(seg); seg = [] }
+    seg.push(i)
+  }
+  if (seg.length > 0) segments.push(seg)
+
+  const lines = new Set<number>()
+  const blockEnds = new Set<number>()
+  for (const segment of segments) {
+    const hasInstructions = segment.some(i => { const l = p.asmCode[i]; return l && !l.isHeader && l.text.trim() !== '' })
+    if (!hasInstructions) continue
+    const hasExecuted = segment.some(i => { const l = p.asmCode[i]; return l && !l.isHeader && l.text.trim() !== '' && executed.has(i) })
+    if (!hasExecuted) {
+      segment.forEach(i => lines.add(i))
+      const lastInstr = [...segment].reverse().find(i => { const l = p.asmCode[i]; return l && !l.isHeader && l.text.trim() !== '' })
+      if (lastInstr !== undefined) blockEnds.add(lastInstr)
+    }
+  }
+  return { lines, blockEnds }
+})
+
 const lineAddrs = computed<Record<number, number>>(() => {
   const p = preset.value
   if (!p) return {}
+  const BASE_PC = 0x08000000
 
+  // Build address map from step execution (for x86 presets with non-sequential PCs)
   const stepAddrMap: Record<number, number> = {}
   let prevPc = p.initialState.pc
   for (const step of p.steps) {
@@ -85,19 +135,17 @@ const lineAddrs = computed<Record<number, number>>(() => {
     prevPc = step.update.pc ?? prevPc + 4
   }
 
+  // Assign addresses: stepAddrMap for executed lines, sequential fallback for others.
+  // Sequential fallback (BASE_PC + instrIdx * 4) matches the ARM tracer model and
+  // correctly handles functions that are present in the assembly but not called
+  // (e.g. when the compiler inlines a call at -O1).
   const result: Record<number, number> = {}
-  let lastAddr = p.initialState.pc
+  let instrIdx = 0
   for (let i = 0; i < p.asmCode.length; i++) {
     const line = p.asmCode[i]
     if (!line || line.isHeader || !line.text.trim()) continue
-    const knownAddr = stepAddrMap[i]
-    if (knownAddr !== undefined) {
-      result[i] = knownAddr
-      lastAddr = knownAddr + 4
-    } else {
-      result[i] = lastAddr
-      lastAddr += 4
-    }
+    result[i] = stepAddrMap[i] ?? BASE_PC + instrIdx * 4
+    instrIdx++
   }
   return result
 })
@@ -141,6 +189,7 @@ function phaseColor(phase?: Phase): string {
 watch(activeAsmLine, async (line) => {
   if (line < 0 || !asmCodeEl.value) return
   await nextTick()
-  ;(asmCodeEl.value.children[line] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  const el = asmCodeEl.value.querySelector(`[data-asm-line="${line}"]`) as HTMLElement | null
+  el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
 })
 </script>

@@ -32,9 +32,17 @@ function regOrder(name: string): number {
 
 function opLabel(op: Operand | undefined): string {
   if (!op) return '?'
-  if (op.type === 'reg') return op.name.toUpperCase()
+  if (op.type === 'reg') {
+    const sh = op.shift ? `, ${op.shift.op} #${op.shift.amount}` : ''
+    return `${op.name.toUpperCase()}${sh}`
+  }
   if (op.type === 'imm') return `#${op.value}`
-  if (op.type === 'mem') return `[${op.base.toUpperCase()}, #${op.offset}]`
+  if (op.type === 'mem') {
+    const base = `[${op.base.toUpperCase()}, #${op.offset}]`
+    if (op.writeBack) return `${base}!`
+    if (op.postIndex !== undefined) return `[${op.base.toUpperCase()}], #${op.postIndex}`
+    return base
+  }
   if (op.type === 'label') return op.name
   if (op.type === 'reglist') return `{${op.regs.map(r => r.toUpperCase()).join(', ')}}`
   return ''
@@ -70,7 +78,17 @@ export function interpretInstruction(
 
   function resolveVal(op: Operand | undefined): number {
     if (!op) return 0
-    if (op.type === 'reg') return getReg(op.name)
+    if (op.type === 'reg') {
+      let v = getReg(op.name)
+      if (op.shift) {
+        const { op: shOp, amount } = op.shift
+        v = shOp === 'LSL' ? (v << amount) >>> 0
+          : shOp === 'LSR' ? v >>> amount
+          : shOp === 'ASR' ? ((v | 0) >> amount) >>> 0
+          : ((v >>> amount) | (v << (32 - amount))) >>> 0
+      }
+      return v >>> 0
+    }
     if (op.type === 'imm') return op.value
     return 0
   }
@@ -328,11 +346,15 @@ export function interpretInstruction(
       const src = operands[1]
       if (dst?.type !== 'reg') return { error: `LDR: レジスタが必要: ${instr.raw}` }
       if (src?.type !== 'mem') return { error: `LDR: メモリオペランドが必要: ${instr.raw}` }
-      const addr = getReg(src.base) + src.offset
+      const baseVal = getReg(src.base)
+      const addr = src.postIndex !== undefined ? baseVal : baseVal + src.offset
       const val = state.stack[addr] ?? 0
+      const update: StateUpdate = { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 }
+      if (src.writeBack) Object.assign(update, setRegUpdate(src.base, addr))
+      if (src.postIndex !== undefined) Object.assign(update, setRegUpdate(src.base, baseVal + src.postIndex))
       return {
-        update: { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 },
-        explain: `メモリからロード`,
+        update,
+        explain: `メモリからロード${src.writeBack ? '（ライトバック）' : src.postIndex !== undefined ? '（ポストインデックス）' : ''}`,
         effect: `${opLabel(dst)} = [0x${addr.toString(16).padStart(8, '0')}] = 0x${val.toString(16)}`,
         phase, nextInstrIdx: defaultNext,
       }
@@ -345,12 +367,16 @@ export function interpretInstruction(
       const dst = operands[1]
       if (src?.type !== 'reg') return { error: `STR: レジスタが必要: ${instr.raw}` }
       if (dst?.type !== 'mem') return { error: `STR: メモリオペランドが必要: ${instr.raw}` }
-      const addr = getReg(dst.base) + dst.offset
+      const baseVal = getReg(dst.base)
+      const addr = dst.postIndex !== undefined ? baseVal : baseVal + dst.offset
       const val = getReg(src.name)
       const metaSet: Record<number, StackMeta> = { [addr]: { label: `${src.name.toUpperCase()} → [0x${addr.toString(16)}]`, kind: 'sw' } }
+      const update: StateUpdate = { stackSet: { [addr]: val }, metaSet, pc: BASE_PC + defaultNext * 4 }
+      if (dst.writeBack) Object.assign(update, setRegUpdate(dst.base, addr))
+      if (dst.postIndex !== undefined) Object.assign(update, setRegUpdate(dst.base, baseVal + dst.postIndex))
       return {
-        update: { stackSet: { [addr]: val }, metaSet, pc: BASE_PC + defaultNext * 4 },
-        explain: `メモリにストア`,
+        update,
+        explain: `メモリにストア${dst.writeBack ? '（ライトバック）' : dst.postIndex !== undefined ? '（ポストインデックス）' : ''}`,
         effect: `[0x${addr.toString(16).padStart(8, '0')}] = 0x${val.toString(16)}`,
         phase, nextInstrIdx: defaultNext,
       }

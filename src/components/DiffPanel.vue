@@ -45,7 +45,7 @@
 import { computed } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
 
-const { showDiff, guide, diffOpen, toggleDiff } = useSimulator()
+const { showDiff, diffOpen, toggleDiff } = useSimulator()
 
-const diffs = computed(() => guide.value?.diffs ?? [])
+const diffs = computed((): { aspect: string; x86: string; arm: string }[] => [])
 </script>

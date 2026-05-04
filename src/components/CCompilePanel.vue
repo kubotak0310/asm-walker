@@ -50,10 +50,7 @@
             @change="onSampleSelect"
           >
             <option value="">サンプルを読み込む...</option>
-            <option value="add">加算関数</option>
-            <option value="factorial">階乗（再帰）</option>
-            <option value="sumArray">配列合計</option>
-            <option value="branch">条件分岐</option>
+            <option v-for="s in ARM_SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
           <!-- Compiler selector -->
           <select
@@ -125,6 +122,7 @@ import { cpp } from '@codemirror/lang-cpp'
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { useSimulator } from '@/composables/useSimulator'
+import { ARM_SAMPLES } from '@/samples'
 
 const {
   simulateCompiled, compileError, isCompiling, setArch, currentStep, gccOutput,
@@ -147,47 +145,7 @@ const COMPILER_NAMES: Record<string, string> = {
 }
 const compilerDisplayName = computed(() => COMPILER_NAMES[compilerId.value] ?? compilerId.value)
 
-const SAMPLES: Record<string, string> = {
-  add:
-`int add(int a, int b) {
-    return a + b;
-}
-
-int main() {
-    return add(3, 5);
-}`,
-
-  factorial:
-`int factorial(int n) {
-    if (n <= 1) return 1;
-    return n * factorial(n - 1);
-}
-
-int main() {
-    return factorial(5);
-}`,
-
-  sumArray:
-`int sum(int *arr, int n) {
-    int s = 0;
-    for (int i = 0; i < n; i++) {
-        s += arr[i];
-    }
-    return s;
-}`,
-
-  branch:
-`int abs_val(int x) {
-    if (x < 0) return -x;
-    return x;
-}
-
-int main() {
-    return abs_val(-7);
-}`,
-}
-
-const DEFAULT_TEXT = SAMPLES.add
+const DEFAULT_TEXT = ARM_SAMPLES[0]?.cCode ?? ''
 
 const cHighlight = HighlightStyle.define([
   { tag: tags.keyword,                    color: '#60a5fa', fontWeight: 'bold' }, // int, return, if ...
@@ -234,10 +192,15 @@ watch(compileError, (err) => {
 })
 
 function onSampleSelect(e: Event) {
-  const key = (e.target as HTMLSelectElement).value
-  if (!key || !view) return
-  const text = SAMPLES[key] ?? ''
-  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } })
+  const id = (e.target as HTMLSelectElement).value
+  if (!id || !view) return
+  const s = ARM_SAMPLES.find(s => s.id === id)
+  if (!s) return
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s.cCode } })
+  compilerId.value = s.compilerId
+  optLevel.value = s.optLevel
+  extraFlags.value = s.extraFlags
+  onCompilerChange()
   ;(e.target as HTMLSelectElement).value = ''
   errors.value = []
 }

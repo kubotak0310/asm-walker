@@ -1,33 +1,13 @@
 import { ref, computed } from 'vue'
-import type { MachineState, Arch } from '@/core/types'
+import type { MachineState, Arch, PresetData } from '@/core/types'
 import { BASE_SP_ARM, BASE_PC_ARM } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
-import type { PresetData } from '@/presets/index'
-import { buildStates } from '@/core/simulator'
-import { getPresets, getPreset } from '@/presets/index'
-import { x86Guides } from '@/guides/x86'
-import { armGuides } from '@/guides/arm'
-import type { GuideData } from '@/guides/x86'
 import { parseARM } from '@/core/arm/parser'
 import { traceProgram } from '@/core/arm/tracer'
 import { adaptGodboltResponse } from '@/core/compiler'
 import type { GodboltResponse } from '@/core/compiler'
 
-// ── Module-level state (singleton) ──────────────────────────────────────────
-const arch = ref<Arch>('arm')
-const currentPresetId = ref('funcCall')
-const currentStep = ref(0)
-const guideOpen = ref(false)
-const diffOpen = ref(false)
-const states = ref<MachineState[]>([])
-const preset = ref<PresetData | null>(null)
-const inputMode = ref<'preset' | 'free' | 'compile'>('preset')
-const freeInputError = ref<string | null>(null)
-const compileError = ref<string | null>(null)
-const isCompiling = ref<boolean>(false)
-const gccOutput = ref<string>('')
-
-const FREE_INPUT_INITIAL_STATE: MachineState = {
+const INITIAL_STATE: MachineState = {
   regs: { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, r6: 0, r7: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0 },
   sp: BASE_SP_ARM,
   fp: 0,
@@ -39,6 +19,16 @@ const FREE_INPUT_INITIAL_STATE: MachineState = {
   mode: 'thread',
   frames: [{ name: 'main', lo: BASE_SP_ARM, hi: BASE_SP_ARM, color: 'purple' }],
 }
+
+// ── Module-level state (singleton) ──────────────────────────────────────────
+const arch = ref<Arch>('arm')
+const currentStep = ref(0)
+const diffOpen = ref(false)
+const states = ref<MachineState[]>([INITIAL_STATE])
+const preset = ref<PresetData | null>(null)
+const compileError = ref<string | null>(null)
+const isCompiling = ref<boolean>(false)
+const gccOutput = ref<string>('')
 
 // ── Module-level derived state ───────────────────────────────────────────────
 const currentState = computed<MachineState>(() =>
@@ -67,18 +57,7 @@ const displayPcChanged = computed<boolean>(() => {
 const isFirst = computed(() => currentStep.value === 0)
 const isLast = computed(() => currentStep.value >= totalSteps.value)
 
-const guide = computed<GuideData | null>(() => {
-  if (!preset.value) return null
-  const guides = arch.value === 'x86' ? x86Guides : armGuides
-  return guides[preset.value.id] ?? null
-})
-
-const availablePresets = computed(() => getPresets(arch.value))
-
-const showDiff = computed(() => {
-  if (!preset.value) return false
-  return !['pointer', 'array', 'interrupt'].includes(preset.value.id)
-})
+const showDiff = computed(() => false)
 
 // ── ARM ABI helpers ──────────────────────────────────────────────────────────
 
@@ -151,27 +130,8 @@ const callDisplay = computed<string | null>(() => {
 })
 
 // ── Actions ──────────────────────────────────────────────────────────────────
-function loadPreset(newArch: Arch, presetId: string) {
-  const p = getPreset(newArch, presetId)
-  if (!p) return
-  preset.value = p
-  states.value = buildStates(p)
-  currentStep.value = 0
-  guideOpen.value = false
-}
-
 function setArch(newArch: Arch) {
   arch.value = newArch
-  const available = getPresets(newArch)
-  const sameId = available.find(p => p.id === currentPresetId.value)
-  const targetId = sameId ? currentPresetId.value : (available[0]?.id ?? 'funcCall')
-  currentPresetId.value = targetId
-  loadPreset(newArch, targetId)
-}
-
-function selectPreset(presetId: string) {
-  currentPresetId.value = presetId
-  loadPreset(arch.value, presetId)
 }
 
 function nextStep() {
@@ -191,40 +151,8 @@ function reset() {
   currentStep.value = 0
 }
 
-function toggleGuide() {
-  guideOpen.value = !guideOpen.value
-}
-
 function toggleDiff() {
   diffOpen.value = !diffOpen.value
-}
-
-function setInputMode(mode: 'preset' | 'free' | 'compile') {
-  inputMode.value = mode
-  if (mode === 'preset') {
-    loadPreset(arch.value, currentPresetId.value)
-  }
-}
-
-function simulateFreeInput(asmText: string) {
-  const parseResult = parseARM(asmText)
-  if (parseResult.errors.length > 0) {
-    freeInputError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
-    return
-  }
-  const result = traceProgram(parseResult, FREE_INPUT_INITIAL_STATE)
-  freeInputError.value = result.error ?? null
-  states.value = result.states
-  preset.value = {
-    id: 'free',
-    name: '自由入力',
-    arch: 'arm',
-    cCode: [],
-    asmCode: result.asmLines,
-    steps: result.steps,
-    initialState: result.states[0] ?? FREE_INPUT_INITIAL_STATE,
-  }
-  currentStep.value = 0
 }
 
 async function simulateCompiled(cSource: string, compilerId: string, optLevel: string) {
@@ -263,7 +191,7 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         compileError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
         return
       }
-      const result = traceProgram(parseResult, FREE_INPUT_INITIAL_STATE, 500, output.cLineMap)
+      const result = traceProgram(parseResult, INITIAL_STATE, 500, output.cLineMap)
       compileError.value = result.error ?? null
       states.value = result.states
       preset.value = {
@@ -273,11 +201,11 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         cCode: cSourceLines,
         asmCode: result.asmLines,
         steps: result.steps,
-        initialState: result.states[0] ?? FREE_INPUT_INITIAL_STATE,
+        initialState: result.states[0] ?? INITIAL_STATE,
       }
     } else {
       const asmLines = output.rawAsm.map(item => ({ text: item.text, isHeader: false }))
-      states.value = [FREE_INPUT_INITIAL_STATE]
+      states.value = [INITIAL_STATE]
       preset.value = {
         id: 'compile',
         name: 'Cコンパイル結果 (x86)',
@@ -285,7 +213,7 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         cCode: cSourceLines,
         asmCode: asmLines,
         steps: [],
-        initialState: FREE_INPUT_INITIAL_STATE,
+        initialState: INITIAL_STATE,
       }
     }
     currentStep.value = 0
@@ -296,15 +224,10 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
   }
 }
 
-// Initialize
-loadPreset('arm', 'funcCall')
-
 export function useSimulator() {
   return {
     arch,
-    currentPresetId,
     currentStep,
-    guideOpen,
     preset,
     currentState,
     prevState,
@@ -312,14 +235,10 @@ export function useSimulator() {
     totalSteps,
     isFirst,
     isLast,
-    guide,
-    availablePresets,
     showDiff,
     diffOpen,
     displayPc,
     displayPcChanged,
-    inputMode,
-    freeInputError,
     compileError,
     isCompiling,
     gccOutput,
@@ -332,14 +251,10 @@ export function useSimulator() {
     callArgCount,
     callDisplay,
     setArch,
-    selectPreset,
     nextStep,
     prevStep,
     reset,
-    toggleGuide,
     toggleDiff,
-    setInputMode,
-    simulateFreeInput,
     simulateCompiled,
   }
 }

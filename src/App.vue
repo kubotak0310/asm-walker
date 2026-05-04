@@ -11,38 +11,12 @@
       <div class="space-y-2">
         <div class="flex flex-wrap items-center gap-3">
           <ArchSwitch />
-          <div class="h-5 w-px bg-gray-700" />
-          <!-- Mode toggle -->
-          <div class="flex rounded overflow-hidden border border-gray-600 text-xs font-bold">
-            <button
-              :class="inputMode === 'preset' ? 'bg-purple-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
-              class="px-3 py-1 transition-colors"
-              @click="setInputMode('preset')"
-            >プリセット</button>
-            <button
-              :class="inputMode === 'free' ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
-              class="px-3 py-1 transition-colors"
-              @click="setInputMode('free')"
-            >自由入力</button>
-            <button
-              :class="inputMode === 'compile' ? 'bg-blue-700 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'"
-              class="px-3 py-1 transition-colors"
-              @click="setInputMode('compile')"
-            >C コンパイル</button>
-          </div>
-          <PresetSelector v-if="inputMode === 'preset'" />
         </div>
         <StepController />
       </div>
 
-      <!-- Guide panel (collapsible, preset mode only) -->
-      <GuidePanel v-if="inputMode === 'preset'" />
-
-      <!-- Free-input editor (full width, free mode only) -->
-      <FreeInputPanel v-if="inputMode === 'free'" />
-
-      <!-- C compile editor (full width, compile mode only) -->
-      <CCompilePanel v-if="inputMode === 'compile'" />
+      <!-- C compile editor -->
+      <CCompilePanel />
 
       <!-- Top: C source (4/12) + Assembly (8/12) -->
       <div class="grid grid-cols-12 gap-3">
@@ -81,9 +55,7 @@
 
 <script setup lang="ts">
 import ArchSwitch from '@/components/ArchSwitch.vue'
-import PresetSelector from '@/components/PresetSelector.vue'
 import StepController from '@/components/StepController.vue'
-import GuidePanel from '@/components/GuidePanel.vue'
 import CSourcePanel from '@/components/CSourcePanel.vue'
 import CodePanel from '@/components/CodePanel.vue'
 import ExplainPanel from '@/components/ExplainPanel.vue'
@@ -92,19 +64,11 @@ import SpecialRegPanel from '@/components/SpecialRegPanel.vue'
 import StackPanel from '@/components/StackPanel.vue'
 import FrameViz from '@/components/FrameViz.vue'
 import DiffPanel from '@/components/DiffPanel.vue'
-import FreeInputPanel from '@/components/FreeInputPanel.vue'
 import CCompilePanel from '@/components/CCompilePanel.vue'
 import { useSimulator } from '@/composables/useSimulator'
-
 import { computed } from 'vue'
 
-const { inputMode, setInputMode, preset } = useSimulator()
+const { preset } = useSimulator()
 
-// CSourcePanel を表示する条件:
-// - プリセットモード（常に）
-// - コンパイルモード かつ コンパイル済み（preset.id === 'compile'）
-const showCSource = computed(() =>
-  inputMode.value === 'preset' ||
-  (inputMode.value === 'compile' && preset.value?.id === 'compile')
-)
+const showCSource = computed(() => preset.value?.id === 'compile')
 </script>

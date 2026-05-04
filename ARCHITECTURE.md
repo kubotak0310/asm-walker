@@ -159,7 +159,9 @@ interface ParseResult {
 ### interpreter.ts — 命令実行
 
 - `interpretInstruction(instr, instrIndex, state, labels): InterpretResult`
-- 全レジスタ値は16進数で effect/explain に表示（`fmtVal()` 関数）
+- `comment`: CodePanel インライン表示用の簡潔な注釈（`r0 ← 3`、`[r7+4]=0x20007fec ← r0(3)` など `←` 記法で統一）
+- `effect`: ExplainPanel 下段表示用（`comment` と同形式）
+- `explain`: ExplainPanel 上段の日本語説明（`ADD : 加算` のように fullName と連結表示）
 - S-suffix命令はフラグ更新 + explain に「（フラグ更新）」追記
 
 ### tracer.ts — 動的実行
@@ -195,16 +197,17 @@ class ArmSimulator implements ArchSimulator { ... }
 ### ステップの型定義
 
 ```typescript
-interface Step {
-  type: 'sw' | 'hw' // hw = ハードウェア自動処理（Cortex-M割り込み退避等）
-  phase: string // 'main' | 'caller' | 'callee' | 'hw' | 'isr' | 'ret'
-  instr: string // アセンブラ命令文字列
-  cLine: number // 対応するCソースの行番号
-  explain: string // 日本語説明
-  effect: string // 実行結果の説明
-  flags: Partial<Flags> // 更新するフラグ
-  isPtr?: boolean // ポインタ操作命令フラグ → 紫バッジ表示
-  isArr?: boolean // 配列要素命令フラグ → 緑バッジ表示
+interface StepData {
+  type: 'sw' | 'hw'   // hw = ハードウェア自動処理（Cortex-M割り込み退避等）
+  phase: Phase        // 'main' | 'caller' | 'callee' | 'hw' | 'isr' | 'ret'
+  asmLine: number     // アセンブラソース行インデックス
+  cLine: number       // 対応するCソースの行番号
+  explain: string     // 日本語説明（ExplainPanel 上段）
+  effect: string      // 実行結果（ExplainPanel 下段、← 記法）
+  comment?: string    // CodePanel インライン注釈（← 記法、簡潔版）
+  isPtr?: boolean     // ポインタ操作命令フラグ → 紫バッジ表示
+  isArr?: boolean     // 配列要素命令フラグ → 緑バッジ表示
+  update: StateUpdate // 状態差分
 }
 ```
 

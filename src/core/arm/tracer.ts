@@ -74,7 +74,7 @@ export function traceProgram(
       return { states, steps, asmLines, error: `行${instr.lineIndex + 1}: ${result.error}` }
     }
 
-    const { update, explain, effect, phase, isPtr, isArr, nextInstrIdx } = result
+    const { update, explain, effect, comment, phase, isPtr, isArr, nextInstrIdx } = result
 
     // Finalize PC: already set in update by interpreter
     const nextState = applyUpdate(state, update)
@@ -86,6 +86,7 @@ export function traceProgram(
       cLine: cLineMap?.get(instr.lineIndex) ?? 0,
       explain,
       effect,
+      comment,
       isPtr,
       isArr,
       update,
@@ -118,7 +119,7 @@ export function traceProgram(
     if (step.asmLine >= 0 && !annotated.has(step.asmLine)) {
       const line = asmLines[step.asmLine]
       if (line && !line.isHeader) {
-        line.comment = step.explain
+        line.comment = step.comment ?? step.explain
         annotated.add(step.asmLine)
       }
     }

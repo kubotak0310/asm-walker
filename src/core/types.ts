@@ -56,6 +56,7 @@ export interface StepData {
   cLine: number
   explain: string
   effect: string
+  comment?: string  // concise inline annotation for CodePanel (separate from explain)
   isPtr?: boolean
   isArr?: boolean
   update: StateUpdate

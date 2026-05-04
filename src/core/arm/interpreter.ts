@@ -9,6 +9,7 @@ export interface InterpretResult {
   update: StateUpdate
   explain: string
   effect: string
+  comment: string   // concise inline annotation for CodePanel
   phase: Phase
   isPtr?: boolean
   isArr?: boolean
@@ -22,6 +23,26 @@ const ADDR_REGS = new Set(['sp', 'lr', 'pc', 'fp'])
 function fmtVal(regName: string, val: number): string {
   if (ADDR_REGS.has(regName)) return hexU32(val)
   return `0x${val.toString(16)}`
+}
+
+// Decimal for small values, hex for address-like values
+function fmtDec(val: number): string {
+  const u = val >>> 0
+  if (u >= 0x08000000) return hexU32(u)
+  return (val | 0).toString(10)
+}
+
+// Format register with its current value: r0(3) or sp(0x20007ff0)
+function fmtRV(name: string, val: number): string {
+  const s = ADDR_REGS.has(name) ? hexU32(val >>> 0) : fmtDec(val)
+  return `${name}(${s})`
+}
+
+// Format memory address expression: [r7+4]=0x20007fec
+function fmtMA(base: string, offset: number, baseVal: number): string {
+  const addr = (baseVal + offset) >>> 0
+  const off = offset === 0 ? '' : offset > 0 ? `+${offset}` : `${offset}`
+  return `[${base}${off}]=${hexU32(addr)}`
 }
 
 function regOrder(name: string): number {
@@ -153,14 +174,21 @@ export function interpretInstruction(
       const src = operands[1]
       if (dst?.type !== 'reg') return { error: `${mnemonic}: レジスタが必要: ${instr.raw}` }
       if (dst.name === 'pc') return { error: 'PC への直接書き込みは非対応 (BX LR を使用)' }
-      let val = resolveVal(src) >>> 0
+      const srcVal = resolveVal(src)
+      let val = srcVal >>> 0
       if (mnemonic === 'MVN') val = (~val) >>> 0
       const update: StateUpdate = { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 }
       if (sFlag) update.flags = computeFlags(val, val, 0, false)
+      const comment = mnemonic === 'MVN'
+        ? `${dst.name} ← ~${src?.type === 'reg' ? fmtRV(src.name, srcVal) : srcVal} = ${fmtDec(val)}`
+        : src?.type === 'reg'
+          ? `${dst.name} ← ${fmtRV(src.name, srcVal)}`
+          : `${dst.name} ← ${fmtDec(val)}`
       return {
         update,
         explain: `${opLabel(dst)} に値をセット${sFlag ? '（フラグ更新）' : ''}`,
-        effect: `${opLabel(dst)} = ${fmtVal(dst.name, val)}`,
+        effect: `${dst.name} ← ${fmtVal(dst.name, val)}`,
+        comment,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -179,13 +207,16 @@ export function interpretInstruction(
       const update: StateUpdate = { ...setRegUpdate(dst.name, result), pc: BASE_PC + defaultNext * 4 }
       if (dst.name === 'sp') update.frames = updateTopFrame(result)
       if (sFlag) update.flags = computeFlags(a + b + c, a, b, false)
-      const fmtA = fmtVal(dst.name, a)
-      const fmtB = fmtVal(dst.name, b)
-      const fmtR = fmtVal(dst.name, result)
+      const aLabel = src1?.type === 'reg' ? fmtRV(src1.name, a) : `${a | 0}`
+      const bLabel = src2?.type === 'reg' ? fmtRV(src2.name, b) : `#${b}`
+      const exprStr = dst.name === 'sp'
+        ? `sp ← sp(${hexU32(a)}) + ${b} = ${hexU32(result)}`
+        : `${dst.name} ← ${aLabel} + ${bLabel}${c ? ' + carry' : ''} = ${fmtDec(result)}`
       return {
         update,
         explain: `加算${sFlag ? '（フラグ更新）' : ''}`,
-        effect: `${opLabel(dst)} = ${fmtA} + ${fmtB}${c ? ' + carry' : ''} = ${fmtR}`,
+        effect: exprStr,
+        comment: exprStr,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -204,13 +235,18 @@ export function interpretInstruction(
       const update: StateUpdate = { ...setRegUpdate(dst.name, result), pc: BASE_PC + defaultNext * 4 }
       if (dst.name === 'sp') update.frames = updateTopFrame(result)
       if (sFlag) update.flags = computeFlags(a - b - borrow, a, b, true)
-      const fmtA = fmtVal(dst.name, a)
-      const fmtB = fmtVal(dst.name, b)
-      const fmtR = fmtVal(dst.name, result)
+      const aLabel = src1?.type === 'reg' ? fmtRV(src1.name, a) : `${a | 0}`
+      const bLabel = src2?.type === 'reg' ? fmtRV(src2.name, b) : `#${b}`
+      const exprStr = dst.name === 'sp'
+        ? `sp ← sp(${hexU32(a)}) - ${b} = ${hexU32(result)}`
+        : mnemonic === 'RSB'
+          ? `${dst.name} ← ${bLabel} - ${aLabel} = ${fmtDec(result)}`
+          : `${dst.name} ← ${aLabel} - ${bLabel}${borrow ? ' - borrow' : ''} = ${fmtDec(result)}`
       return {
         update,
         explain: `減算${sFlag ? '（フラグ更新）' : ''}`,
-        effect: `${opLabel(dst)} = ${fmtA} - ${fmtB}${borrow ? ' - borrow' : ''} = ${fmtR}`,
+        effect: exprStr,
+        comment: exprStr,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -228,10 +264,16 @@ export function interpretInstruction(
       const acc = ra ? resolveVal(ra) : 0
       const mul = Math.imul(a, b)
       const result = (mnemonic === 'MLA' ? mul + acc : mnemonic === 'MLS' ? acc - mul : mul) >>> 0
+      const aLabel = rn?.type === 'reg' ? fmtRV(rn.name, a) : `${a}`
+      const bLabel = rm?.type === 'reg' ? fmtRV(rm.name, b) : `${b}`
+      const comment = mnemonic === 'MUL'
+        ? `${dst.name} ← ${aLabel} × ${bLabel} = ${fmtDec(result)}`
+        : `${dst.name} ← ${aLabel} × ${bLabel} ${mnemonic === 'MLA' ? '+' : '-'} ${fmtDec(acc)} = ${fmtDec(result)}`
       return {
         update: { ...setRegUpdate(dst.name, result), pc: BASE_PC + defaultNext * 4 },
         explain: `乗算${sFlag ? '（フラグ更新）' : ''}`,
-        effect: `${opLabel(dst)} = ${fmtVal(dst.name, a)} × ${fmtVal(dst.name, b)}${mnemonic !== 'MUL' ? ` ${mnemonic === 'MLA' ? '+' : '-'} ${fmtVal(dst.name, acc)}` : ''} = ${fmtVal(dst.name, result)}`,
+        effect: comment,
+        comment,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -246,10 +288,14 @@ export function interpretInstruction(
       const b = resolveVal(rm)
       if (b === 0) return { error: `${mnemonic}: ゼロ除算: ${instr.raw}` }
       const result = Math.trunc(a / b) >>> 0
+      const aLabel = rn?.type === 'reg' ? fmtRV(rn.name, a) : `${a}`
+      const bLabel = rm?.type === 'reg' ? fmtRV(rm.name, b) : `${b}`
+      const comment = `${dst.name} ← ${aLabel} ÷ ${bLabel} = ${fmtDec(result)}`
       return {
         update: { ...setRegUpdate(dst.name, result), pc: BASE_PC + defaultNext * 4 },
         explain: `除算`,
-        effect: `${opLabel(dst)} = ${fmtVal(dst.name, a)} / ${fmtVal(dst.name, b)} = ${fmtVal(dst.name, result)}`,
+        effect: comment,
+        comment,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -274,10 +320,14 @@ export function interpretInstruction(
       const opSym = mnemonic === 'AND' ? '&' : mnemonic === 'ORR' ? '|' : mnemonic === 'EOR' ? '^' : '& ~'
       const update: StateUpdate = { ...setRegUpdate(dst.name, result), pc: BASE_PC + defaultNext * 4 }
       if (sFlag) update.flags = computeFlags(result, a, b, false)
+      const aLabel = src1?.type === 'reg' ? fmtRV(src1.name, a) : `0x${a.toString(16)}`
+      const bLabel = src2?.type === 'reg' ? fmtRV(src2.name, b) : `0x${b.toString(16)}`
+      const comment = `${dst.name} ← ${aLabel} ${opSym} ${bLabel} = 0x${result.toString(16)}`
       return {
         update,
         explain: `ビット演算${sFlag ? '（フラグ更新）' : ''}`,
-        effect: `${opLabel(dst)} = 0x${a.toString(16)} ${opSym} 0x${b.toString(16)} = 0x${result.toString(16)}`,
+        effect: comment,
+        comment,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -300,10 +350,15 @@ export function interpretInstruction(
       )
       const update: StateUpdate = { ...setRegUpdate(dst.name, result), pc: BASE_PC + defaultNext * 4 }
       if (sFlag) update.flags = computeFlags(result, val, shamt, false)
+      const symMap: Record<string, string> = { LSL: '<<', LSR: '>>', ASR: '>>>', ROR: 'ror' }
+      const sym = symMap[mnemonic] ?? mnemonic
+      const srcLabel = src?.type === 'reg' ? fmtRV(src.name, val) : `${val}`
+      const comment = `${dst.name} ← ${srcLabel} ${sym} ${shamt} = ${fmtDec(result)}`
       return {
         update,
         explain: `シフト演算${sFlag ? '（フラグ更新）' : ''}`,
-        effect: `${opLabel(dst)} = 0x${val.toString(16)} ${mnemonic} ${shamt} = 0x${result.toString(16)}`,
+        effect: comment,
+        comment,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -319,23 +374,22 @@ export function interpretInstruction(
       const a = resolveVal(src1)
       const b = resolveVal(src2)
       let flags: Partial<Flags>
-      let opDesc: string
-      const h = (v: number) => `0x${v.toString(16)}`
       if (mnemonic === 'CMP') {
         flags = computeFlags(a - b, a, b, true)
-        opDesc = `${h(a)} - ${h(b)}`
       } else if (mnemonic === 'CMN') {
         flags = computeFlags(a + b, a, b, false)
-        opDesc = `${h(a)} + ${h(b)}`
       } else {
         const r = (mnemonic === 'TST' ? a & b : a ^ b) >>> 0
         flags = { zero: r === 0, negative: (r >>> 31) !== 0, carry: state.flags.carry, overflow: state.flags.overflow }
-        opDesc = `${h(a)} ${mnemonic === 'TST' ? '&' : '^'} ${h(b)}`
       }
+      const aLabel = src1.type === 'reg' ? fmtRV(src1.name, a) : `${a}`
+      const bLabel = src2.type === 'reg' ? fmtRV(src2.name, b) : `#${b}`
+      const flagStr = `Z=${flags.zero ? 1 : 0} N=${flags.negative ? 1 : 0} C=${flags.carry ? 1 : 0} V=${flags.overflow ? 1 : 0}`
       return {
         update: { flags, pc: BASE_PC + defaultNext * 4 },
         explain: `比較（フラグのみ更新）`,
-        effect: `${opDesc} → Z=${flags.zero ? 1 : 0} N=${flags.negative ? 1 : 0} C=${flags.carry ? 1 : 0} V=${flags.overflow ? 1 : 0}`,
+        effect: flagStr,
+        comment: `${aLabel} と ${bLabel} を比較: ${flagStr}`,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -354,10 +408,14 @@ export function interpretInstruction(
       const update: StateUpdate = { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 }
       if (src.writeBack) Object.assign(update, setRegUpdate(src.base, addr))
       if (src.postIndex !== undefined) Object.assign(update, setRegUpdate(src.base, baseVal + src.postIndex))
+      const memDesc = fmtMA(src.base, src.postIndex !== undefined ? 0 : src.offset, baseVal)
+      const extra = src.writeBack ? '（ライトバック）' : src.postIndex !== undefined ? '（ポストインデックス）' : ''
+      const comment = `${dst.name} ← ${memDesc}(${fmtDec(val)})`
       return {
         update,
-        explain: `メモリからロード${src.writeBack ? '（ライトバック）' : src.postIndex !== undefined ? '（ポストインデックス）' : ''}`,
-        effect: `${opLabel(dst)} = [${hexU32(addr)}] = 0x${val.toString(16)}`,
+        explain: `メモリからロード${extra}`,
+        effect: comment,
+        comment,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -376,10 +434,14 @@ export function interpretInstruction(
       const update: StateUpdate = { stackSet: { [addr]: val }, metaSet, pc: BASE_PC + defaultNext * 4 }
       if (dst.writeBack) Object.assign(update, setRegUpdate(dst.base, addr))
       if (dst.postIndex !== undefined) Object.assign(update, setRegUpdate(dst.base, baseVal + dst.postIndex))
+      const memDesc = fmtMA(dst.base, dst.postIndex !== undefined ? 0 : dst.offset, baseVal)
+      const extra = dst.writeBack ? '（ライトバック）' : dst.postIndex !== undefined ? '（ポストインデックス）' : ''
+      const comment = `${memDesc} ← ${fmtRV(src.name, val)}`
       return {
         update,
-        explain: `メモリにストア${dst.writeBack ? '（ライトバック）' : dst.postIndex !== undefined ? '（ポストインデックス）' : ''}`,
-        effect: `[${hexU32(addr)}] = 0x${val.toString(16)}`,
+        explain: `メモリにストア${extra}`,
+        effect: comment,
+        comment,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -388,7 +450,6 @@ export function interpretInstruction(
     case 'PUSH': {
       const reglist = operands[0]
       if (reglist?.type !== 'reglist') return { error: `PUSH: レジスタリストが必要: ${instr.raw}` }
-      // Sort ascending by register number; lowest reg → lowest address
       const regs = [...reglist.regs].sort((a, b) => regOrder(a) - regOrder(b))
       const newSp = state.sp - 4 * regs.length
       const stackSet: Record<number, number> = {}
@@ -400,10 +461,12 @@ export function interpretInstruction(
         addr += 4
       }
       const frames = updateTopFrame(newSp)
+      const regLabels = regs.map(r => fmtRV(r, getReg(r))).join(', ')
       return {
         update: { sp: newSp, stackSet, metaSet, frames, pc: BASE_PC + defaultNext * 4 },
         explain: `レジスタをスタックに保存`,
-        effect: `SP = ${hexU32(newSp)}`,
+        effect: `sp ← ${hexU32(newSp)}`,
+        comment: `${regLabels} をスタックに保存`,
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -419,6 +482,14 @@ export function interpretInstruction(
       let newLr: number | undefined
       let nextIdx = defaultNext
       let retPhase = false
+
+      // Collect values for comment before modifying sp
+      let spCursor = state.sp
+      const popLabels = regs.map(r => {
+        const v = state.stack[spCursor] ?? 0
+        spCursor += 4
+        return fmtRV(r, v)
+      }).join(', ')
 
       for (const reg of regs) {
         const val = state.stack[sp] ?? 0
@@ -442,7 +513,8 @@ export function interpretInstruction(
       return {
         update,
         explain: `スタックからレジスタを復元`,
-        effect: `SP = ${hexU32(sp)}`,
+        effect: `sp ← ${hexU32(sp)}`,
+        comment: `スタックから ${popLabels} を復元`,
         phase: retPhase ? 'ret' : phase,
         nextInstrIdx: nextIdx,
       }
@@ -455,7 +527,8 @@ export function interpretInstruction(
         return {
           update: { pc: BASE_PC + defaultNext * 4 },
           explain: `条件不成立、次へ`,
-          effect: `条件 (${cond}) 不成立 → スキップ`,
+          effect: `${cond} 不成立、スキップ`,
+          comment: `${cond} 不成立、スキップ`,
           phase, nextInstrIdx: defaultNext,
         }
       }
@@ -463,11 +536,12 @@ export function interpretInstruction(
       if (labelOp?.type !== 'label') return { error: `B: ラベルが必要: ${instr.raw}` }
       const target = labels.get(labelOp.name)
       if (target === undefined) return { error: `B: 未定義ラベル: ${labelOp.name}` }
-      const suffix = cond === 'AL' ? '' : cond
+      const condStr = cond === 'AL' ? '' : `${cond} 成立、`
       return {
         update: { pc: BASE_PC + target * 4 },
         explain: `分岐`,
-        effect: `PC = ${hexU32(BASE_PC + target * 4)}`,
+        effect: `PC ← ${labelOp.name}(${hexU32(BASE_PC + target * 4)})`,
+        comment: `${condStr}${labelOp.name} へ分岐`,
         phase, nextInstrIdx: target,
       }
     }
@@ -484,7 +558,8 @@ export function interpretInstruction(
       return {
         update: { lr: retAddr, frames: [...state.frames, newFrame], pc: targetAddr },
         explain: `関数呼び出し（LRに戻りアドレスを保存）`,
-        effect: `LR = ${hexU32(retAddr)}, PC → ${labelOp.name}`,
+        effect: `LR ← ${hexU32(retAddr)}, PC ← ${labelOp.name}`,
+        comment: `${labelOp.name}() を呼び出し（LR=${hexU32(retAddr)}）`,
         phase, nextInstrIdx: target,
       }
     }
@@ -500,7 +575,8 @@ export function interpretInstruction(
       return {
         update: { frames, pc: lrVal },
         explain: `レジスタにジャンプ（関数復帰）`,
-        effect: `PC = ${reg.name.toUpperCase()} = ${hexU32(lrVal)}`,
+        effect: `PC ← ${fmtRV(reg.name, lrVal)}`,
+        comment: `${fmtRV(reg.name, lrVal)} へ戻る（関数復帰）`,
         phase: 'ret', nextInstrIdx: nextIdx,
       }
     }
@@ -518,12 +594,22 @@ export function interpretInstruction(
         return { error: `${mnemonic}: 未定義ラベル: ${labelOp.name}` }
       }
       const target = taken ? (labels.get(labelOp.name) ?? defaultNext) : defaultNext
+      const regLabel = fmtRV(reg.name, val)
+      const comment = taken
+        ? mnemonic === 'CBZ'
+          ? `${regLabel} = 0、${labelOp.name} へ分岐`
+          : `${regLabel} ≠ 0、${labelOp.name} へ分岐`
+        : mnemonic === 'CBZ'
+          ? `${regLabel} ≠ 0、スキップ`
+          : `${regLabel} = 0、スキップ`
+      const effect = taken
+        ? `PC ← ${labelOp.name}(${hexU32(BASE_PC + target * 4)})`
+        : `スキップ`
       return {
         update: { pc: BASE_PC + target * 4 },
         explain: `ゼロ比較分岐`,
-        effect: taken
-          ? `${reg.name.toUpperCase()} = ${val} → 分岐 (${labelOp.name})`
-          : `${reg.name.toUpperCase()} = ${val} → スキップ`,
+        effect,
+        comment,
         phase, nextInstrIdx: target,
       }
     }
@@ -533,6 +619,7 @@ export function interpretInstruction(
         update: { pc: BASE_PC + defaultNext * 4 },
         explain: '何もしない',
         effect: '（処理なし）',
+        comment: '（何もしない）',
         phase, nextInstrIdx: defaultNext,
       }
 

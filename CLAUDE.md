@@ -57,6 +57,11 @@
 - ユニットテストを `parseARM + traceProgram` ベースのインラインデータに書き直し（プリセット依存排除）
 - コードベース約1,900行削減
 
+### アセンブラコメント改善（2026-05）で完了した機能
+- `StepData` に `comment?` フィールドを追加（CodePanel インライン表示専用、`explain` とは分離）
+- インタープリタの `comment` / `effect` を `←` 記法で統一（`r0 ← 3`、`[r7+4]=0x20007fec ← r0(3)` 等）
+- ExplainPanel: 「命令詳細」ヘッダー追加、fullName と explain を1行に統合（`ADD : 加算`）、effect を独立行に配置
+
 ---
 
 ## フェーズ2以降の開発方針

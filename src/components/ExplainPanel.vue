@@ -1,5 +1,7 @@
 <template>
-  <div class="bg-gray-800 rounded-lg border border-gray-700 p-4 min-h-24">
+  <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">命令詳細</div>
+    <div class="p-4 min-h-24">
     <!-- HWステップ -->
     <div v-if="step?.type === 'hw'" class="space-y-3">
       <div class="flex items-center gap-2 bg-orange-900/40 border border-orange-700 rounded px-3 py-2">
@@ -7,7 +9,7 @@
         <span class="text-orange-200 text-sm font-bold">ハードウェアが自動実行 — アセンブラ命令は存在しません</span>
       </div>
       <p class="text-gray-200 text-sm">{{ step.explain }}</p>
-      <p class="text-gray-300 text-xs font-mono">→ {{ step.effect }}</p>
+      <p class="text-gray-300 text-xs font-mono">{{ step.effect }}</p>
     </div>
 
     <!-- SWステップ -->
@@ -41,9 +43,12 @@
         <span v-if="step.isPtr" class="text-xs bg-purple-800 text-purple-200 px-1.5 py-0.5 rounded">ポインタ操作</span>
         <span v-if="step.isArr" class="text-xs bg-green-800 text-green-200 px-1.5 py-0.5 rounded">配列要素</span>
       </div>
-      <p v-if="step.fullName" class="text-blue-400 text-xs font-mono font-bold tracking-widest uppercase">{{ step.fullName }}</p>
-      <p class="text-gray-200 text-sm">{{ step.explain }}</p>
-      <p class="text-gray-300 text-xs font-mono">→ {{ step.effect }}</p>
+      <p class="text-gray-200 text-sm pl-2">
+        <span v-if="step.fullName" class="text-blue-400 font-mono font-bold tracking-widest uppercase">{{ step.fullName }}</span>
+        <span v-if="step.fullName" class="text-gray-500"> : </span>
+        {{ step.explain }}
+      </p>
+      <p class="text-gray-300 text-xs font-mono pl-2">{{ step.effect }}</p>
 
       <div v-if="step.isPtr" class="bg-purple-900/30 border border-purple-800 rounded p-2 text-xs text-purple-200">
         💡 ポインタ操作: アドレス値の取得・設定・間接参照が含まれます
@@ -56,6 +61,7 @@
     <!-- 全ステップ完了 -->
     <div v-else class="text-gray-500 text-sm flex items-center gap-2">
       <span>✓ 全ステップ完了 — 「戻る」で見直せます</span>
+    </div>
     </div>
   </div>
 </template>

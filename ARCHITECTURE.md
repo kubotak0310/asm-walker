@@ -24,19 +24,16 @@ asm-walker/
 ├── src/
 │   ├── components/
 │   │   ├── ArchSwitch.vue          # x86 / ARM 切り替えスイッチ
-│   │   ├── PresetSelector.vue      # プリセット選択
-│   │   ├── StepController.vue      # ◀ 戻る / 次のステップ ▶ / リセット（← → キーショートカット付き）
-│   │   ├── GuidePanel.vue          # 学習ガイドパネル（開閉式）
-│   │   ├── CSourcePanel.vue        # Cソース表示（CodePanelから分離）
-│   │   ├── CodePanel.vue           # アセンブラ表示（PCアドレス付き）
+│   │   ├── StepController.vue      # ◀ 戻る / 次のステップ ▶ / リセット / ステップカウンター（← → キーショートカット付き）
+│   │   ├── CSourcePanel.vue        # Cソース表示（コンパイル後のみ表示）
+│   │   ├── CodePanel.vue           # アセンブラ表示（PCアドレス付き、コメントは `;` 区切り）
 │   │   ├── ExplainPanel.vue        # 命令の日本語説明（フルネーム・構文フォーマット・記法ヘルプ付き）
-│   │   ├── RegisterPanel.vue       # 汎用レジスタ表示
+│   │   ├── RegisterPanel.vue       # 汎用レジスタ表示（ARM ABI 引数/戻り値バッジ付き）
 │   │   ├── SpecialRegPanel.vue     # SP / LR / PC / Mode 表示
 │   │   ├── StackPanel.vue          # スタックメモリ表示（未初期化スロット表示対応）
 │   │   ├── FrameViz.vue            # スタックフレーム色分け図（3層ネスト）
-│   │   ├── FreeInputPanel.vue      # 自由入力エディタ（CodeMirror 6 + 実行ボタン）
-│   │   ├── CCompilePanel.vue       # Cコンパイルモード（CodeMirror 6 + Godbolt API + 状態表示バー）
-│   │   └── DiffPanel.vue           # x86 vs ARM 差分（x86/ARM両対応、最下部、デフォルト非表示）
+│   │   ├── CCompilePanel.vue       # Cコンパイルモード（CodeMirror 6 + サンプル選択 + Godbolt API + 状態表示バー）
+│   │   └── DiffPanel.vue           # x86 vs ARM 差分（最下部、デフォルト非表示）
 │   ├── core/
 │   │   ├── simulator.ts            # ステップ実行エンジン（applyUpdate / buildStates）
 │   │   ├── types.ts                # 共通型定義（MachineState, StepData, StackFrame 等）
@@ -45,33 +42,17 @@ asm-walker/
 │   │       ├── parser.ts           # ARMアセンブラ2パスパーサー（fp/sl/ip エイリアス・シフト・pre/post-indexed 対応）
 │   │       ├── interpreter.ts      # ParsedInstruction + MachineState → StateUpdate + 説明テキスト
 │   │       └── tracer.ts           # 動的実行でスナップショット列を生成（cLineMap 引数追加）
-│   ├── presets/
-│   │   ├── index.ts                # プリセット一覧エクスポート
-│   │   ├── x86/
-│   │   │   ├── funcCall.ts
-│   │   │   ├── arithmetic.ts
-│   │   │   ├── branch.ts
-│   │   │   ├── pointer.ts          # ポインタとアドレス
-│   │   │   └── array.ts            # 配列を関数に渡す
-│   │   └── arm/
-│   │       ├── funcCall.ts
-│   │       ├── arithmetic.ts
-│   │       ├── branch.ts
-│   │       ├── pointer.ts
-│   │       ├── array.ts
-│   │       └── interrupt.ts        # 割り込みスタック退避プリセット
-│   ├── guides/
-│   │   ├── x86.ts                  # x86 各プリセットの学習ガイドデータ
-│   │   └── arm.ts                  # ARM 各プリセットの学習ガイドデータ
+│   ├── samples/
+│   │   └── index.ts                # ARMサンプル定義（SampleDef × 5種 — コンパイル可能なCコードテンプレート）
 │   ├── composables/
-│   │   └── useSimulator.ts         # シミュレーター・プリセット・アーキ状態管理（Vue Composable）
+│   │   └── useSimulator.ts         # シミュレーター・アーキ状態管理（Vue Composable、シングルトン）
 │   ├── App.vue
 │   └── main.ts
 ├── public/
 ├── tests/
 │   ├── unit/
-│   │   ├── x86Simulator.test.ts
-│   │   └── armSimulator.test.ts
+│   │   ├── x86Simulator.test.ts    # applyUpdate / buildStates のユニットテスト
+│   │   └── armSimulator.test.ts    # parseARM + traceProgram ベースのインラインテスト
 │   └── e2e/
 ├── api/
 │   └── compile.ts                  # Vercel Serverless Function（Godbolt API CORSプロキシ）
@@ -90,25 +71,22 @@ Vue 3 の Composition API + `reactive` / `ref` でグローバルな状態を管
 
 ```typescript
 // src/composables/useSimulator.ts のイメージ
+// モジュールレベルのシングルトン（ref / computed をモジュールスコープで保持）
 
 interface SimulatorState {
   arch: 'x86' | 'arm'
-  preset: string
-  step: number
-  totalSteps: number
-  states: MachineState[] // 各ステップのスナップショット配列
-  guideOpen: boolean
-  // フェーズ2追加
-  inputMode: 'preset' | 'free' | 'compile'
-  freeInputError: string | null
-  // フェーズ3追加
+  currentStep: number
+  totalSteps: number          // preset.steps.length
+  states: MachineState[]      // 各ステップのスナップショット配列
+  preset: PresetData | null   // コンパイル後に設定される（id='compile'）
   compileError: string | null
   isCompiling: boolean
+  diffOpen: boolean
 }
 
-// フェーズ2追加関数
-// simulateFreeInput(asmText): parse → trace → states/steps を更新
-// setInputMode(mode): preset / free を切り替え
+// 主要アクション
+// simulateCompiled(cSource, compilerId, optLevel): Godbolt API → parseARM → traceProgram → states/steps を更新
+// nextStep() / prevStep() / reset(): ステップ移動
 
 interface MachineState {
   regs: Record<string, number> // { r0: 3, r1: 5, ... }
@@ -134,13 +112,20 @@ interface StackMeta {
 
 ---
 
-## フェーズ2: 自由入力パイプライン
+## ARMコンパイルパイプライン
 
 ```
-[ユーザー入力 (CodeMirror)] → [parser.ts] → [tracer.ts] → states[] + steps[]
-                                   ↓                             ↓
-                            ParsedInstruction[]         ← 既存の可視化コンポーネント群
-                            + labels Map                  (変更不要)
+[Cソース (CodeMirror)] → [Godbolt API] → [compiler.ts] → asmText + cLineMap
+                                                                ↓
+                                                          [parser.ts]
+                                                                ↓
+                                                  ParsedInstruction[] + labels Map
+                                                                ↓
+                                                          [tracer.ts]
+                                                                ↓
+                                                     states[] + steps[]
+                                                                ↓
+                                                  ← 既存の可視化コンポーネント群
 ```
 
 ### parser.ts — 2パスARMパーサー
@@ -169,7 +154,7 @@ interface ParseResult {
 }
 ```
 
-**対応範囲:** Compiler Explorer 出力形式（`square(int):` ラベル、`@` コメント、`bl sum(int, int)` BL operand）に対応済み。
+**対応範囲:** Compiler Explorer 出力形式（`square(int):` ラベル、`@` / `;` コメント、`bl sum(int, int)` BL operand）に対応済み。
 
 ### interpreter.ts — 命令実行
 

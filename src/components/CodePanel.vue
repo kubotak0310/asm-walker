@@ -57,8 +57,8 @@
             </span>
             <span
               v-if="line.comment && !unreachableInfo.lines.has(i)"
-              class="text-gray-600 truncate"
-            >@ {{ line.comment }}</span>
+              class="text-gray-400 truncate"
+            >; {{ line.comment }}</span>
           </template>
         </div>
 

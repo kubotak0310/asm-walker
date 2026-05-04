@@ -65,6 +65,7 @@ export interface AsmLine {
   text: string
   isHeader?: boolean
   phase?: Phase
+  comment?: string  // auto-generated from tracer explain (free input / compile mode)
 }
 
 export interface PresetData {

@@ -44,7 +44,7 @@
               ]"
             >▶</span>
 
-            <span :class="instrTextClass(i)">
+            <span :class="[instrTextClass(i), 'shrink-0 min-w-[30ch]']">
               <span
                 v-if="currentStepData?.isPtr && activeAsmLine === i"
                 class="bg-purple-800 text-purple-200 px-1 rounded mr-1"
@@ -55,6 +55,10 @@
               >arr</span>
               {{ line.text.trim() }}
             </span>
+            <span
+              v-if="line.comment && !unreachableInfo.lines.has(i)"
+              class="text-gray-600 truncate"
+            >@ {{ line.comment }}</span>
           </template>
         </div>
 

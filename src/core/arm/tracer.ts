@@ -112,8 +112,17 @@ export function traceProgram(
     }
   }
 
-  // Append a terminal "done" state so the user can see the final register state
-  // (no additional step — user is at the last state after the last instruction)
+  // Annotate each executed line with its first-visit explain for inline display in CodePanel
+  const annotated = new Set<number>()
+  for (const step of steps) {
+    if (step.asmLine >= 0 && !annotated.has(step.asmLine)) {
+      const line = asmLines[step.asmLine]
+      if (line && !line.isHeader) {
+        line.comment = step.explain
+        annotated.add(step.asmLine)
+      }
+    }
+  }
 
   return { states, steps, asmLines }
 }

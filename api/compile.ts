@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-const ALLOWED_COMPILERS = new Set(['carm1121', 'armug1320', 'armug1430', 'x86-64g1420'])
+const ALLOWED_COMPILERS = new Set(['carm1121', 'armug1320', 'armug1430', 'cg142'])
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

@@ -465,7 +465,7 @@ export function interpretInstruction(
       return {
         update: { sp: newSp, stackSet, metaSet, frames, pc: BASE_PC + defaultNext * 4 },
         explain: `レジスタをスタックに保存`,
-        effect: `sp ← ${hexU32(newSp)}`,
+        effect: `sp ← ${hexU32(newSp)}; [sp] ← ${regLabels}`,
         comment: `${regLabels} をスタックに保存`,
         phase, nextInstrIdx: defaultNext,
       }
@@ -513,7 +513,7 @@ export function interpretInstruction(
       return {
         update,
         explain: `スタックからレジスタを復元`,
-        effect: `sp ← ${hexU32(sp)}`,
+        effect: `${popLabels} ← [旧sp]; sp ← ${hexU32(sp)}`,
         comment: `スタックから ${popLabels} を復元`,
         phase: retPhase ? 'ret' : phase,
         nextInstrIdx: nextIdx,

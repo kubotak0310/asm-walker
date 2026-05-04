@@ -76,7 +76,16 @@ export function traceX86(
 
     const { update, explain, effect, comment, phase, isPtr, isArr, nextInstrIdx } = result
 
-    const nextState = applyUpdate(state, update)
+    // For RET returning to a caller, override update.pc with the real return address so
+    // CodePanel's stepAddrMap assigns the correct virtual address to the instruction after CALL.
+    let fixedUpdate = update
+    if (instr.mnemonic === 'RET' && callStack.length > 0) {
+      const returnFrame = callStack[callStack.length - 1]
+      const returnIdx = returnFrame?.returnInstrIdx ?? instrCount
+      fixedUpdate = { ...update, pc: BASE_PC + returnIdx * INSTR_SIZE }
+    }
+
+    const nextState = applyUpdate(state, fixedUpdate)
     states.push(nextState)
     steps.push({
       type: 'sw',
@@ -88,7 +97,7 @@ export function traceX86(
       comment,
       isPtr,
       isArr,
-      update,
+      update: fixedUpdate,
     })
 
     // Maintain callStack for depth and RET targeting

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AsmWalker について</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.7;
+      color: #222;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.2rem; margin-top: 2.5rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.5rem; color: #444; }
+    p  { margin: 0.6rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+    pre code { background: none; padding: 0; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; }
+    th { background: #f0f0f0; }
+    .note {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .back { display: inline-block; margin-bottom: 1.5rem; color: #0066cc; text-decoration: none; font-size: 0.93rem; }
+    .back:hover { text-decoration: underline; }
+    footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+  </style>
+</head>
+<body>
+
+  <a class="back" href="/">← ツールに戻る</a>
+
+  <h1>AsmWalker について</h1>
+  <p>AsmWalker は、C言語とアセンブラの対応を1命令ずつ確認しながら学べるブラウザ学習ツールです。</p>
+
+  <h2>できること</h2>
+  <ul>
+    <li>C言語のソースコードをその場でコンパイルし、生成されたアセンブラをステップ実行</li>
+    <li>各命令の意味・フォーマット・実行効果をパネルに表示</li>
+    <li>レジスタ・スタックの変化をリアルタイムで可視化</li>
+    <li>関数呼び出し・戻り値の流れを ABI（呼び出し規約）に沿って表示</li>
+  </ul>
+
+  <h2>対応アーキテクチャ</h2>
+  <table>
+    <thead>
+      <tr><th>アーキテクチャ</th><th>コンパイラ</th><th>構文</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ARM Cortex-M</td><td>ARM GCC 11.2.1 / 13.2.0 / 14.3.0</td><td>ARM 構文</td></tr>
+      <tr><td>x86-64</td><td>x86-64 GCC 14.2.0</td><td>Intel 構文（<code>-masm=intel</code>）</td></tr>
+    </tbody>
+  </table>
+
+  <h2>コンパイルの仕組み</h2>
+  <p>
+    コンパイルには <a href="https://godbolt.org" target="_blank" rel="noopener">Compiler Explorer（Godbolt）</a> の公開 API を利用しています。
+    エディタに入力した C コードをブラウザから Godbolt API に送信し、返ってきたアセンブラテキストをツール内でパース・実行しています。
+  </p>
+  <p>Godbolt API が返すのは純粋なアセンブラテキストです。アドレス情報は含まれません。</p>
+
+  <h2>アドレス表示の仕組み</h2>
+  <p>
+    アセンブラパネルに表示される <code>0x401000</code> のようなアドレスは、Godbolt が付与したものではなく、
+    <strong>ツール内部で生成した仮想アドレス</strong>です。
+  </p>
+
+  <h3>割り当て方法</h3>
+  <p>各アーキテクチャの基底アドレスから、命令インデックスに固定サイズを掛けて計算します：</p>
+  <pre><code>仮想アドレス = 基底アドレス + 命令インデックス × 4</code></pre>
+  <table>
+    <thead>
+      <tr><th>アーキテクチャ</th><th>基底アドレス</th><th>例（0番目の命令）</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>x86-64</td><td><code>0x401000</code></td><td>命令0=0x401000, 命令1=0x401004 …</td></tr>
+      <tr><td>ARM Cortex-M</td><td><code>0x08000000</code></td><td>命令0=0x08000000, 命令1=0x08000004 …</td></tr>
+    </tbody>
+  </table>
+
+  <h3>なぜ「固定4バイト」なのか</h3>
+  <p>実際の命令長はアーキテクチャによって異なります：</p>
+  <table>
+    <thead>
+      <tr><th>アーキテクチャ</th><th>実際の命令長</th><th>このツールでの扱い</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>x86-64</td><td>1〜15 バイト（可変長）</td><td>4 バイト固定</td></tr>
+      <tr><td>ARM Thumb2</td><td>2 または 4 バイト混在</td><td>4 バイト固定</td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    本来の命令バイト数を取得するには各命令をエンコード・逆アセンブルする必要があります。
+    このツールでは学習のしやすさを優先し、固定4バイト刻みの仮想アドレスを使用しています。
+    <code>call</code> 命令の「戻り先アドレス」と、その次の命令のアドレス表示が一致するよう、
+    ステップ実行エンジンで整合性を保つ処理を行っています。
+  </div>
+
+  <h2>ステップ実行の仕組み</h2>
+  <p>
+    Godbolt から受け取ったアセンブラテキストをツール独自のパーサーで解析し、
+    命令列と仮想マシン状態（レジスタ・スタック・フラグ）のスナップショット配列を生成します。
+    ステップ移動はこのスナップショット配列を前後に参照するだけで、再実行は行いません。
+  </p>
+  <p>対応命令（x86-64）: <code>MOV / LEA / PUSH / POP / ADD / SUB / IMUL / IDIV / AND / OR / XOR / SHL / SHR / CMP / TEST / JMP / Jcc / CALL / RET / LEAVE</code> ほか</p>
+  <p>対応命令（ARM）: <code>MOV / LDR / STR / ADD / SUB / MUL / CMP / B / BL / BX / PUSH / POP / LSL / LSR</code> ほか</p>
+
+  <h2>技術構成</h2>
+  <table>
+    <tbody>
+      <tr><td>フロントエンド</td><td>Vue 3 + TypeScript + Tailwind CSS</td></tr>
+      <tr><td>エディタ</td><td>CodeMirror 6</td></tr>
+      <tr><td>ビルドツール</td><td>Vite</td></tr>
+      <tr><td>コンパイル API</td><td>Godbolt Compiler Explorer API</td></tr>
+      <tr><td>ホスティング</td><td>Vercel（Serverless Function で CORS プロキシ）</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    AsmWalker — アセンブラ学習ツール
+  </footer>
+
+</body>
+</html>

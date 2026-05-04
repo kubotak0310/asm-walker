@@ -2,10 +2,10 @@
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
     <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">特殊レジスタ</div>
     <div class="p-2 space-y-1 font-mono text-xs">
-      <RegRow :label="arch === 'x86' ? 'RSP' : 'SP'" :value="state.sp" :prev="prev?.sp" :changed="state.sp !== prev?.sp" kind="orange" />
-      <RegRow :label="arch === 'x86' ? 'RBP' : 'FP'" :value="fpValue" :prev="prevFpValue" :changed="fpValue !== prevFpValue" kind="normal" />
+      <RegRow :label="arch === 'x86' ? 'RSP' : 'SP'" :sub-label="arch === 'x86' ? 'Stack Pointer' : undefined" :value="state.sp" :prev="prev?.sp" :changed="state.sp !== prev?.sp" kind="orange" />
+      <RegRow :label="arch === 'x86' ? 'RBP' : 'FP'" :sub-label="arch === 'x86' ? 'Base Pointer' : undefined" :value="fpValue" :prev="prevFpValue" :changed="fpValue !== prevFpValue" kind="normal" />
       <RegRow v-if="arch === 'arm'" label="LR" :value="state.lr" :prev="prev?.lr" :changed="state.lr !== prev?.lr" :kind="isExcReturn ? 'exc' : 'normal'" />
-      <RegRow :label="arch === 'x86' ? 'RIP' : 'PC'" :value="displayPc" :changed="displayPcChanged" kind="normal" />
+      <RegRow :label="arch === 'x86' ? 'RIP' : 'PC'" :sub-label="arch === 'x86' ? 'Instruction Pointer' : undefined" :value="displayPc" :changed="displayPcChanged" kind="normal" />
 
       <!-- Flags -->
       <div class="pt-1 border-t border-gray-700 mt-1">
@@ -62,6 +62,7 @@ const flags = computed(() => {
 const RegRow = defineComponent({
   props: {
     label: String,
+    subLabel: String,
     value: Number,
     prev: Number,
     changed: Boolean,
@@ -84,12 +85,19 @@ const RegRow = defineComponent({
             : 'text-gray-300'
 
       const rowClass = [
-        'flex justify-between px-2 py-1 rounded',
+        'flex justify-between items-center px-2 py-1 rounded',
         isOrange && changed ? 'bg-orange-900/40' : changed ? 'bg-green-900/40' : '',
       ]
 
+      const labelEl = props.subLabel
+        ? h('div', { class: 'flex flex-col' }, [
+            h('span', { class: changed ? 'text-white font-bold' : 'text-gray-400' }, props.label),
+            h('span', { class: 'text-gray-400 text-[10px] leading-tight' }, `(${props.subLabel})`),
+          ])
+        : h('span', { class: changed ? 'text-white font-bold' : 'text-gray-400' }, props.label)
+
       return h('div', { class: rowClass }, [
-        h('span', { class: changed ? 'text-white font-bold' : 'text-gray-400' }, props.label),
+        labelEl,
         h('div', { class: 'flex items-center gap-1' }, [
           isExc ? h('span', { class: 'text-orange-500 text-xs' }, 'EXC_RETURN') : null,
           h('span', { class: valClass }, hex),

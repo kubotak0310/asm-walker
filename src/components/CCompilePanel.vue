@@ -50,12 +50,7 @@
             @change="onSampleSelect"
           >
             <option value="" disabled hidden>サンプルを選択してください...</option>
-            <optgroup label="ARM Cortex-M">
-              <option v-for="s in ARM_SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
-            </optgroup>
-            <optgroup label="x86-64">
-              <option v-for="s in X86_SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
-            </optgroup>
+            <option v-for="s in SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
           <!-- Compiler selector -->
           <select
@@ -63,14 +58,14 @@
             class="bg-gray-600 text-gray-200 text-xs rounded px-2 py-1 border border-gray-500"
             @change="onCompilerChange"
           >
-            <optgroup label="ARM (Cortex-M)">
+            <template v-if="arch === 'arm'">
               <option value="carm1121">ARM GCC 11.2.1</option>
               <option value="armug1320">ARM GCC 13.2.0</option>
               <option value="armug1430">ARM GCC 14.3.0</option>
-            </optgroup>
-            <optgroup label="x86-64">
-              <option value="x86-64g1420">x86-64 gcc 14.2.0</option>
-            </optgroup>
+            </template>
+            <template v-else>
+              <option value="cg142">x86-64 GCC 14.2.0</option>
+            </template>
           </select>
           <!-- Optimization selector -->
           <select
@@ -127,14 +122,19 @@ import { cpp } from '@codemirror/lang-cpp'
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { useSimulator } from '@/composables/useSimulator'
-import { ARM_SAMPLES, X86_SAMPLES } from '@/samples'
+import { SAMPLES } from '@/samples'
 
 const {
   arch, simulateCompiled, compileError, isCompiling, setArch, currentStep, gccOutput,
   isReturnStep, currentFuncName, returnReg, returnHex, returnDec, callTarget, callDisplay,
 } = useSimulator()
 
-const ALL_SAMPLES = [...ARM_SAMPLES, ...X86_SAMPLES]
+const COMPILER_DEFAULT_FLAGS: Record<string, string> = {
+  carm1121:     '-mcpu=cortex-m3 -mthumb',
+  armug1320:    '-mcpu=cortex-m3 -mthumb',
+  armug1430:    '-mcpu=cortex-m3 -mthumb',
+  'cg142': '-masm=intel',
+}
 
 const editorEl = ref<HTMLElement | null>(null)
 const compilerId = ref('carm1121')
@@ -149,11 +149,11 @@ const COMPILER_NAMES: Record<string, string> = {
   carm1121: 'ARM GCC 11.2.1',
   armug1320: 'ARM GCC 13.2.0',
   armug1430: 'ARM GCC 14.3.0',
-  'x86-64g1420': 'x86-64 GCC 14.2.0',
+  'cg142': 'x86-64 GCC 14.2.0',
 }
 const compilerDisplayName = computed(() => COMPILER_NAMES[compilerId.value] ?? compilerId.value)
 
-const DEFAULT_TEXT = ARM_SAMPLES[0]?.cCode ?? ''
+const DEFAULT_TEXT = SAMPLES[0]?.cCode ?? ''
 
 const cHighlight = HighlightStyle.define([
   { tag: tags.keyword,                    color: '#60a5fa', fontWeight: 'bold' }, // int, return, if ...
@@ -200,19 +200,26 @@ watch(compileError, (err) => {
 })
 
 function onSampleSelect() {
-  const s = ALL_SAMPLES.find(s => s.id === selectedSampleId.value)
+  const s = SAMPLES.find(s => s.id === selectedSampleId.value)
   if (!s || !view) return
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s.cCode } })
-  compilerId.value = s.compilerId
-  optLevel.value = s.optLevel
-  extraFlags.value = s.extraFlags
-  onCompilerChange()
   errors.value = []
 }
 
 function onCompilerChange() {
   setArch(compilerId.value.includes('arm') ? 'arm' : 'x86')
+  extraFlags.value = COMPILER_DEFAULT_FLAGS[compilerId.value] ?? ''
 }
+
+watch(() => arch.value, (newArch) => {
+  if (newArch === 'x86' && compilerId.value !== 'cg142') {
+    compilerId.value = 'cg142'
+    extraFlags.value = COMPILER_DEFAULT_FLAGS['cg142'] ?? ''
+  } else if (newArch === 'arm' && compilerId.value === 'cg142') {
+    compilerId.value = 'carm1121'
+    extraFlags.value = COMPILER_DEFAULT_FLAGS['carm1121'] ?? ''
+  }
+})
 
 async function compile() {
   if (!view) return

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>関数呼び出しの仕組み — AsmWalker ガイド</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    .step {
+      display: flex;
+      gap: 0.8rem;
+      margin: 0.6rem 0;
+      align-items: flex-start;
+    }
+    .step-num {
+      background: #333;
+      color: #fff;
+      border-radius: 50%;
+      width: 1.5rem;
+      height: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+    }
+
+    .back { display: inline-block; margin-bottom: 1.5rem; color: #0066cc; text-decoration: none; font-size: 0.93rem; }
+    .back:hover { text-decoration: underline; }
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+  </style>
+</head>
+<body>
+
+  <a class="back" href="/about.html">← AsmWalker について</a>
+
+  <h1>関数呼び出しの仕組み</h1>
+  <p>C言語で関数を呼び出すとき、コンパイラはどのようなアセンブラ命令を生成しているのか。このページでは関数呼び出しに関わる一連の仕組みを順に説明します。</p>
+
+  <div class="toc">
+    <h4>目次</h4>
+    <ol>
+      <li><a href="#problem">「呼び出し」で解決しなければならない問題</a></li>
+      <li><a href="#args">引数の渡し方（呼び出し規約）</a></li>
+      <li><a href="#retaddr">戻り先アドレスの保存</a></li>
+      <li><a href="#stack-frame">スタックフレーム</a></li>
+      <li><a href="#retval">関数戻り値の返し方</a></li>
+      <li><a href="#whole-picture">全体の流れ</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="problem">1. 「呼び出し」で解決しなければならない問題</h2>
+
+  <p>次の C コードを例に考えます。</p>
+  <pre><code>int add(int a, int b) {
+    return a + b;
+}
+
+int main(void) {
+    int result = add(3, 5);
+    return 0;
+}</code></pre>
+
+  <p><code>main</code> が <code>add(3, 5)</code> を呼び出すとき、CPU は以下の3つの問題を解決しなければなりません。</p>
+  <ol>
+    <li><strong>引数をどう渡すか</strong> — <code>3</code> と <code>5</code> を <code>add</code> に届ける</li>
+    <li><strong>どこに戻ってくるか</strong> — <code>add</code> が終わったら <code>main</code> の続きに戻れる</li>
+    <li><strong>戻り値をどう受け取るか</strong> — <code>add</code> の計算結果を <code>main</code> で使える</li>
+  </ol>
+
+  <p>これらの取り決めを <strong>呼び出し規約（Calling Convention / ABI）</strong> と呼びます。アーキテクチャごとに標準が決まっており、コンパイラはこの規約に従ってコードを生成します。</p>
+
+  <!-- ============================================================ -->
+  <h2 id="args">2. 引数の渡し方（呼び出し規約）</h2>
+
+  <p>引数は <strong>レジスタ</strong> を使って渡します。スタックへの書き込みではなくレジスタを使うのは、メモリアクセスより高速だからです。</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM Cortex-M（AAPCS）</h4>
+      <p>第1〜第4引数を <code>r0</code>〜<code>r3</code> に格納する。<br>第5引数以降はスタックに積む。</p>
+      <pre><code>mov r0, #3   <span class="comment">; 第1引数 a = 3</span>
+mov r1, #5   <span class="comment">; 第2引数 b = 5</span>
+bl  add</code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64（System V AMD64 ABI）</h4>
+      <p>第1〜第6引数を <code>rdi rsi rdx rcx r8 r9</code> の順に格納する。<br>第7引数以降はスタックに積む。</p>
+      <pre><code>mov edi, 3   <span class="comment">; 第1引数 a = 3</span>
+mov esi, 5   <span class="comment">; 第2引数 b = 5</span>
+call add</code></pre>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>eax / edi のような 32bit 名が出てくる理由：</strong><br>
+    引数が <code>int</code>（32bit）の場合、GCC は <code>rdi</code>（64bit）ではなく <code>edi</code>（32bit）を使います。
+    CPU の仕様上、<code>edi</code> への書き込みは <code>rdi</code> の上位32bitを自動的にゼロクリアするため、動作は同じです。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    サンプル「関数呼び出し」をコンパイルし、<code>call</code>（x86）または <code>bl</code>（ARM）命令のステップまで進めると、
+    引数レジスタ（x86: <code>rdi</code>/<code>rsi</code>、ARM: <code>r0</code>/<code>r1</code>）に値がセットされた状態がレジスタパネルにバッジ付きで表示されます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="retaddr">3. 戻り先アドレスの保存</h2>
+
+  <p>関数が呼び出される前の <code>main</code> の「続き」のアドレスを <strong>戻り先アドレス（Return Address）</strong> と呼びます。</p>
+  <p>CPU がプログラムのどこを実行しているかは <strong>プログラムカウンタ（PC / RIP）</strong> に記録されています。<code>call</code> や <code>bl</code> 命令はこのカウンタを呼び出し先に書き換えます。そのとき、戻り先アドレスをどこかに保存しておかないと、関数終了後に元の場所に戻れません。</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM：リンクレジスタ（LR / r14）に保存</h4>
+      <p><code>BL</code> 命令が実行されると、戻り先アドレスが自動的に <code>LR</code> に書き込まれます。</p>
+      <pre><code>bl add      <span class="comment">; LR ← 戻り先アドレス</span>
+            <span class="comment">; PC ← add のアドレス</span>
+
+<span class="comment">; add 内での return</span>
+bx lr       <span class="comment">; PC ← LR（main に戻る）</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64：スタックに保存</h4>
+      <p><code>call</code> 命令が実行されると、戻り先アドレスがスタックに push されます。</p>
+      <pre><code>call add    <span class="comment">; [rsp] ← 戻り先アドレス</span>
+            <span class="comment">; rsp  -= 8</span>
+            <span class="comment">; RIP  ← add のアドレス</span>
+
+<span class="comment">; add 内での return</span>
+ret         <span class="comment">; RIP ← [rsp]（main に戻る）</span>
+            <span class="comment">; rsp += 8</span></code></pre>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>ARM と x86 の根本的な違い：</strong><br>
+    ARM はレジスタ1本（LR）に戻り先アドレスを保存するため、関数の中でさらに関数を呼ぶと LR が上書きされてしまいます。
+    そのため、ARM の関数は最初に <code>push {lr}</code> でスタックに待避し、戻る直前に <code>pop {pc}</code> で復元します。<br>
+    x86 は <code>call</code> の時点でスタックに積むので、この問題が自動的に解決されています。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    <code>call</code>（x86）命令のステップの命令詳細パネルに、戻り先アドレスが
+    <code>[rsp] ← 0x401038</code> のような形式で表示されます。
+    その値がスタックパネルにも積まれているので、両方を見比べると戻り先アドレスの保存場所がつかめます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="stack-frame">4. スタックフレーム</h2>
+
+  <p>関数が実行される間、ローカル変数や一時データを置くためにスタック上に確保した領域を <strong>スタックフレーム</strong> と呼びます。</p>
+  <p>スタックは高アドレス側から低アドレス側に向かって成長します。</p>
+
+  <h3>「解放」とはスタックポインタを動かすだけ</h3>
+
+  <p>スタックフレームは関数が終わると <strong>解放</strong> されます。ただし、これはメモリ上の値を消去しているわけではありません。</p>
+  <p>スタックの確保も解放も、<strong>スタックポインタ（SP / RSP）を動かすだけ</strong>で実現されます。</p>
+
+  <pre><code>確保: sub rsp, 16    <span class="comment">; SP を 16 下げる → その領域が「使用中」になる</span>
+解放: add rsp, 16    <span class="comment">; SP を 16 上げる → その領域が「空き」になる</span>
+                     <span class="comment">; ※ メモリ上の値は残ったまま（次に使う関数が上書きするまで）</span></code></pre>
+
+  <div class="key">
+    <strong>「解放後も値が残る」落とし穴：</strong><br>
+    スタックに置いたローカル変数のアドレスをポインタとして外部に渡すと、
+    関数が返った後に SP が戻されてもメモリ上の値はしばらく残ります。
+    しかし次の関数呼び出しで上書きされるため、そのポインタ経由でアクセスすると
+    不定な値を読むことになります。これが C 言語でよく起きる「スタック変数のアドレス返却バグ」の原因です。
+  </div>
+
+  <h3>フレームの作り方（プロローグ）</h3>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>push {r7, lr}     <span class="comment">; 呼び出し元の r7（FP）と LR を待避</span>
+sub  r7, sp, #0   <span class="comment">; r7（FP）← 現在の SP</span>
+sub  sp, sp, #8   <span class="comment">; ローカル変数分のスタック確保</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>push rbp          <span class="comment">; 呼び出し元の rbp を待避</span>
+mov  rbp, rsp     <span class="comment">; rbp ← 現在の rsp（フレーム基点）</span>
+sub  rsp, 16      <span class="comment">; ローカル変数分のスタック確保</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    <code>r7</code>（ARM）・<code>rbp</code>（x86）は <strong>フレームポインタ（FP / Base Pointer）</strong> と呼ばれ、フレームの基点アドレスを保持します。
+    ローカル変数へのアクセスは「フレームポインタ ± オフセット」で行います。
+  </p>
+
+  <pre><code><span class="comment">; x86-64 の例：ローカル変数 a を [rbp-4] に配置</span>
+mov DWORD PTR [rbp-4], edi    <span class="comment">; a = 第1引数（スタックに保存）</span>
+mov eax, DWORD PTR [rbp-4]   <span class="comment">; eax = a（読み出し）</span></code></pre>
+
+  <div class="key">
+    <strong>フレームポインタが省略されることがある：</strong><br>
+    最適化オプション（<code>-O1</code> 以上）や ARM Thumb モード（<code>-mthumb</code>）では、
+    コンパイラがフレームポインタを省略し、<strong>スタックポインタからのオフセット</strong>で
+    ローカル変数にアクセスすることがあります。
+    <br><br>
+    <code>mov DWORD PTR [rsp+4], edi</code>（フレームポインタなし）<br><br>
+    この場合 <code>rbp</code>（または <code>r7</code>）は汎用レジスタとして別用途に使われます。
+    AsmWalker のサンプルは <code>-O0</code>（最適化なし）でコンパイルするため、
+    フレームポインタを使う形式で出力されます。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    <code>push rbp</code>（x86）または <code>push {r7, lr}</code>（ARM）のステップでスタックパネルを見ると、
+    フレームポインタが新しく積まれる様子が確認できます。
+    ステップを進めるごとにスタックが下方向（低アドレス側）に伸びていく動きが視覚的にわかります。
+  </div>
+
+  <h3>フレームの解放（エピローグ）</h3>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>pop {r7, pc}   <span class="comment">; r7 復元 + PC ← LR（return）</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>pop rbp        <span class="comment">; rbp 復元</span>
+ret            <span class="comment">; RIP ← [rsp]（return）、rsp += 8</span>
+<span class="comment">; ※ GCC は leave 命令で pop rbp の代わりに使うことがある</span></code></pre>
+    </div>
+  </div>
+
+  <h3>スタックの状態（x86-64 の例）</h3>
+
+  <pre><code>高アドレス
+┌──────────────────────────────┐
+│  ...（main のフレーム）       │
+│  戻り先アドレス（call が積む）  │ ← call add 実行直後
+│  保存された rbp               │ ← push rbp で積む
+│  ローカル変数 a = 3           │ ← [rbp-4]
+│  ローカル変数 b = 5           │ ← [rbp-8]
+│  ...（空き）                  │ ← rsp が指す位置
+低アドレス
+
+  ↑ pop rbp / ret が実行されると rsp が上に戻り、
+    add のフレーム領域は「空き」扱いになる（値は消えない）</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="retval">5. 関数戻り値の返し方</h2>
+
+  <p>戻り値（return value）は決まったレジスタに格納して返します。</p>
+
+  <table>
+    <thead>
+      <tr><th>アーキテクチャ</th><th>整数・ポインタの戻り値</th><th>64bit 戻り値</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ARM Cortex-M</td><td><code>r0</code></td><td><code>r0:r1</code>（上位 r1）</td></tr>
+      <tr><td>x86-64</td><td><code>rax</code>（32bit 結果なら <code>eax</code>）</td><td><code>rax</code></td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="comment">; x86-64 の add 関数の末尾</span>
+mov edx, DWORD PTR [rbp-4]   <span class="comment">; edx = a</span>
+mov eax, DWORD PTR [rbp-8]   <span class="comment">; eax = b</span>
+add eax, edx                  <span class="comment">; eax = a + b（関数戻り値）</span>
+pop rbp
+ret                           <span class="comment">; main に戻る。eax に結果が残っている</span></code></pre>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    <code>ret</code>（x86）または <code>bx lr</code> / <code>pop {pc}</code>（ARM）のステップでレジスタパネルを見ると、
+    <code>eax</code>（x86）または <code>r0</code>（ARM）に「戻り値」バッジが表示されます。
+    その値が呼び出し元 <code>main</code> の変数 <code>result</code> に対応します。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="whole-picture">6. 全体の流れ</h2>
+
+  <p><code>main</code> から <code>add(3, 5)</code> を呼び出して戻るまでの一連の流れです。</p>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div><strong>引数をレジスタにセット</strong><br>
+      <code>mov edi, 3</code> / <code>mov esi, 5</code>（x86）または <code>mov r0, #3</code> / <code>mov r1, #5</code>（ARM）
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div><strong>call / bl 命令で関数へジャンプ</strong><br>
+      戻り先アドレスをスタック（x86）またはLR（ARM）に保存し、PCを add の先頭に書き換える。
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div><strong>プロローグ：スタックフレームを作る</strong><br>
+      前のフレームポインタを待避し、新しいフレームポインタをセット。ローカル変数の領域を確保する。
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div><strong>関数本体の処理</strong><br>
+      引数（レジスタ）を読み取り、計算を行い、戻り値を <code>eax</code>（x86）または <code>r0</code>（ARM）にセット。
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div><strong>エピローグ：スタックフレームを解放</strong><br>
+      フレームポインタを復元し、スタックを巻き戻す。
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">6</div>
+    <div><strong>ret / bx lr 命令で main に戻る</strong><br>
+      スタック（x86）またはLR（ARM）から戻り先アドレスを取り出し、PCにセット。
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">7</div>
+    <div><strong>main が戻り値を使う</strong><br>
+      <code>eax</code>（x86）または <code>r0</code>（ARM）に結果が入っている。
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    サンプル「関数呼び出し」を選んでコンパイルすると、上記の流れをステップ実行で1命令ずつ確認できます。
+    <code>call</code> 命令のステップでは引数レジスタの値がバッジ表示され、<code>ret</code> 命令のステップでは戻り値レジスタがハイライトされます。
+  </div>
+
+  <footer>
+    <a href="/about.html">← AsmWalker について</a> &nbsp;|&nbsp;
+    <a href="/">ツールを開く</a>
+  </footer>
+
+</body>
+</html>

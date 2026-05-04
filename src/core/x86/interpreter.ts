@@ -236,11 +236,12 @@ export function interpretX86(
     const newSp = (state.sp - 8) >>> 0
     const src = op0.type === 'reg' ? fmtRV(op0.name, val) : fmtDec(val)
     const isAddrVal = (val >>> 0) >= 0x400000 && (val >>> 0) <= 0x800000
-    const comment = `rsp ← ${hexU32(newSp)}; [rsp] ← ${src}`
+    const effect = `rsp ← ${hexU32(newSp)}; [rsp] ← ${src}`
+    const comment = `${src} をスタックに保存`
     return ok(
       { sp: newSp, stackSet: { [newSp]: val >>> 0 } },
       `${src} をスタックにプッシュ`,
-      comment, comment,
+      effect, comment,
       nextDefault,
       { isPtr: isAddrVal },
     )
@@ -251,11 +252,12 @@ export function interpretX86(
     if (!op0 || op0.type !== 'reg') return { error: 'POP: operand不足' }
     const val = readMem(state.sp, state)
     const newSp = (state.sp + 8) >>> 0
-    const comment = `${op0.name} ← [rsp]=${hexU32(state.sp)}(${fmtDec(val)}); rsp ← ${hexU32(newSp)}`
+    const effect = `${op0.name} ← [rsp]=${hexU32(state.sp)}(${fmtDec(val)}); rsp ← ${hexU32(newSp)}`
+    const comment = `スタックから ${fmtRV(op0.name, val)} を復元`
     return ok(
       { ...regUpdate(op0.name, val), sp: newSp, stackRemove: [state.sp] },
       `スタックからポップ`,
-      comment, comment,
+      effect, comment,
     )
   }
 
@@ -469,7 +471,8 @@ export function interpretX86(
       if (target === undefined) return { error: `CALL: ラベル "${op0.name}" が見つかりません` }
       const retAddr = nextPc
       const newSp = (state.sp - 8) >>> 0
-      const comment = `rsp ← ${hexU32(newSp)}; [rsp] ← ${hexU32(retAddr)}, RIP ← ${op0.name}`
+      const effect = `rsp ← ${hexU32(newSp)}; [rsp] ← ${hexU32(retAddr)}, RIP ← ${op0.name}`
+      const comment = `戻り先(${hexU32(retAddr)})をスタックに積んで ${op0.name.split('(')[0]} をコール`
       // Determine frame color based on call depth
       const color = FRAME_COLORS[Math.min(callDepth + 1, 2)] ?? 'green'
       // Try to extract simple function name (strip parameter types)
@@ -481,7 +484,7 @@ export function interpretX86(
       return ok(
         { sp: newSp, stackSet: { [newSp]: retAddr }, frames: newFrames },
         `関数呼び出し (CALL ${funcName})`,
-        comment, comment, target,
+        effect, comment, target,
       )
     }
 

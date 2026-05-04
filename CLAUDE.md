@@ -76,6 +76,19 @@
 - `src/samples/index.ts`: `X86_SAMPLES` 5種追加（ARM_SAMPLES と同じCコード、compilerId=x86-64g1420、extraFlags=-masm=intel）
 - `src/core/types.ts`: `BASE_PC_X86 = 0x401000` を追加
 
+### UI・品質改善（2026-05）で完了した機能
+- `CCompilePanel.vue`: コンパイラセレクタを arch 別に切り替え（ARM/x86 のオプションを分離）、arch 変更時に compilerId/extraFlags を自動同期
+- `api/compile.ts`: Godbolt compiler ID を `x86-64g1420` → `cg142`（x86-64 GCC 14.2.0）に修正
+- `SpecialRegPanel.vue`: x86 モード時に RSP/RBP/RIP の下に括弧付きサブラベル（Stack Pointer / Base Pointer / Instruction Pointer）を表示
+- `ExplainPanel.vue`: `overflow-hidden` 削除による `?` ポップアップクリップ問題を修正、arch 対応の構文記法ガイド（`HELP_ROWS_ARM` / `HELP_ROWS_X86`）を実装
+- `CodePanel.vue`: アセンブラコピーボタン（Material Icons `content_copy`）を追加、"Copied!" フェードアニメーション付き（0.8秒）
+- `index.html`: Google Material Icons CDN リンクを追加
+- ARM/x86 インタープリタ: PUSH/POP/CALL の `comment`（人間向け説明）と `effect`（状態変化）を分離・統一
+- `src/core/x86/tracer.ts`: RET ステップの `update.pc` をセンチネル値から実際の戻り先アドレスに修正（CodePanel のアドレス表示ズレを解消）
+- `src/samples/index.ts`: X86_SAMPLES の compilerId を `cg142` に修正
+- `public/about.html`: ツール説明ページを新規作成（アーキテクチャ・アドレス表示の仕組み・技術構成を説明）
+- `public/guide/function-call.html`: 関数呼び出しの仕組み解説ページを新規作成（ARM/x86 対比・スタックフレーム・ABI）
+
 ---
 
 ## フェーズ2以降の開発方針
@@ -106,7 +119,17 @@ npm run type-check # TypeScript型チェック
 
 ## 絶対に守るルール
 
-### 0. 問題報告を修正より先に行う
+### 0. コミットはユーザーが明示的に指示した時のみ行う
+
+実装・修正・ドキュメント更新が完了しても、**ユーザーが「コミットして」と指示するまでコミットしてはならない。**
+
+- 計画やタスクリストに「コミット」と書かれていても、実行するには口頭指示が必要
+- コミットメッセージは英語で書く
+- コミット前に CLAUDE.md / SPEC.md / ARCHITECTURE.md の更新漏れを確認する
+
+---
+
+### 1. 問題報告を修正より先に行う
 
 バグ・不具合・改善点を発見した場合、**いきなり修正してはならない**。まず状況を報告する。
 

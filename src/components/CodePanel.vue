@@ -1,16 +1,30 @@
 <template>
-  <div class="bg-gray-800 rounded-lg overflow-hidden border border-gray-700">
-    <div class="px-3 py-2 bg-gray-700 flex items-center justify-between">
+  <div class="bg-gray-800 rounded-lg border border-gray-700">
+    <div class="px-3 py-2 bg-gray-700 rounded-t-lg flex items-center justify-between">
       <span class="text-gray-300 text-xs font-bold">アセンブラ</span>
-      <span
-        v-if="activeAsmLine >= 0 && lineAddrs[activeAsmLine] !== undefined"
-        class="text-xs font-mono bg-yellow-900/60 text-yellow-200 px-2 py-0.5 rounded"
-      >
-        PC → {{ hexU32(lineAddrs[activeAsmLine]!) }}
-      </span>
-      <span v-else-if="activeAsmLine < 0 && currentStepData?.type === 'hw'" class="text-xs text-orange-400">
-        PC → HW処理中
-      </span>
+      <div class="flex items-center gap-2">
+        <span
+          v-if="activeAsmLine >= 0 && lineAddrs[activeAsmLine] !== undefined"
+          class="text-xs font-mono bg-yellow-900/60 text-yellow-200 px-2 py-0.5 rounded"
+        >
+          PC → {{ hexU32(lineAddrs[activeAsmLine]!) }}
+        </span>
+        <span v-else-if="activeAsmLine < 0 && currentStepData?.type === 'hw'" class="text-xs text-orange-400">
+          PC → HW処理中
+        </span>
+        <div v-if="preset?.asmCode?.length" class="relative flex items-center">
+          <Transition name="fade">
+            <span v-if="copied" class="absolute bottom-7 left-1/2 -translate-x-1/2 text-xs text-green-400 whitespace-nowrap pointer-events-none bg-gray-900 px-1.5 py-0.5 rounded border border-gray-600">Copied!</span>
+          </Transition>
+          <button
+            @click="copyAsm"
+            title="アセンブラをコピー"
+            class="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-600 transition-colors"
+          >
+            <span class="material-icons text-base text-gray-400">content_copy</span>
+          </button>
+        </div>
+      </div>
     </div>
     <div class="p-2 font-mono text-xs overflow-auto max-h-96" ref="asmCodeEl">
       <template v-for="(line, i) in preset?.asmCode ?? []" :key="i">
@@ -75,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
 import { BASE_PC_ARM } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
@@ -186,6 +200,24 @@ function phaseColor(phase?: Phase): string {
   return `${map[phase ?? ''] ?? 'text-gray-400'} text-xs`
 }
 
+const copied = ref(false)
+let copyTimer: ReturnType<typeof setTimeout> | null = null
+
+function copyAsm() {
+  const lines = preset.value?.asmCode ?? []
+  const text = lines.map(line => {
+    if (!line.text.trim()) return ''
+    const comment = line.comment ? `  ; ${line.comment}` : ''
+    return `${line.text}${comment}`
+  }).join('\n').trim()
+  navigator.clipboard.writeText(text)
+  copied.value = true
+  if (copyTimer) clearTimeout(copyTimer)
+  copyTimer = setTimeout(() => { copied.value = false }, 800)
+}
+
+onUnmounted(() => { if (copyTimer) clearTimeout(copyTimer) })
+
 watch(activeAsmLine, async (line) => {
   if (line < 0 || !asmCodeEl.value) return
   await nextTick()
@@ -193,3 +225,12 @@ watch(activeAsmLine, async (line) => {
   el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
 })
 </script>
+
+<style scoped>
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+</style>

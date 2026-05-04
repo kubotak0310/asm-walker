@@ -1,6 +1,6 @@
 <template>
-  <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">命令詳細</div>
+  <div class="bg-gray-800 rounded-lg border border-gray-700">
+    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold rounded-t-lg">命令詳細</div>
     <div class="p-4 min-h-24">
     <!-- HWステップ -->
     <div v-if="step?.type === 'hw'" class="space-y-3">
@@ -26,15 +26,20 @@
           >?</button>
           <div
             v-if="showHelp"
-            class="absolute top-6 left-0 z-50 w-80 bg-gray-900 border border-gray-600 rounded-lg p-3 shadow-xl"
+            class="absolute top-6 left-0 z-50 w-[480px] bg-gray-900 border border-gray-600 rounded-lg p-3 shadow-xl"
           >
             <p class="text-gray-300 text-xs font-bold mb-2">構文記法ガイド</p>
-            <table class="w-full text-xs border-collapse">
+            <table class="w-full text-xs border-collapse table-fixed">
+              <colgroup>
+                <col class="w-28" />
+                <col />
+                <col class="w-36" />
+              </colgroup>
               <tbody>
                 <tr v-for="row in HELP_ROWS" :key="row.sym" class="border-t border-gray-700">
-                  <td class="py-1 pr-3 font-mono text-yellow-300 whitespace-nowrap">{{ row.sym }}</td>
-                  <td class="py-1 pr-3 text-gray-300">{{ row.desc }}</td>
-                  <td class="py-1 text-gray-500 font-mono whitespace-nowrap">{{ row.ex }}</td>
+                  <td class="py-1 pr-3 font-mono text-yellow-300 whitespace-nowrap align-top">{{ row.sym }}</td>
+                  <td class="py-1 pr-3 text-gray-300 align-top">{{ row.desc }}</td>
+                  <td class="py-1 text-gray-500 font-mono break-all align-top">{{ row.ex }}</td>
                 </tr>
               </tbody>
             </table>
@@ -94,7 +99,7 @@ onMounted(() => document.addEventListener('click', onDocClick))
 onUnmounted(() => document.removeEventListener('click', onDocClick))
 watch(currentStepData, () => { showHelp.value = false })
 
-const HELP_ROWS = [
+const HELP_ROWS_ARM = [
   { sym: '{S}',      desc: '省略可能なSサフィックス。付けるとフラグ更新',  ex: 'MOV / MOVS' },
   { sym: '{ }',      desc: '省略可能な要素',                               ex: '{, #offset}' },
   { sym: '[ ]',      desc: 'メモリアドレスを参照（デリファレンス）',        ex: '[SP, #4]' },
@@ -106,6 +111,20 @@ const HELP_ROWS = [
   { sym: '#imm',     desc: '即値リテラル (Immediate)',                      ex: '#16, #0x10' },
   { sym: 'reglist',  desc: 'レジスタリスト（{ }は構文の一部）',             ex: '{R0, R1, LR}' },
 ]
+
+const HELP_ROWS_X86 = [
+  { sym: 'Rd',          desc: '宛先レジスタ (Destination)',                ex: 'rax, rbx' },
+  { sym: 'Rs',          desc: 'ソースレジスタ (Source)',                   ex: 'rcx, rdx' },
+  { sym: 'imm',         desc: '即値リテラル (Immediate)  ※ # なし',       ex: '5, 0x10, -4' },
+  { sym: '[mem]',       desc: 'メモリアドレスを参照（デリファレンス）',     ex: '[rbp-4]' },
+  { sym: 'r/m',         desc: 'レジスタ または メモリのどちらでも可',       ex: 'rax / [rbp-8]' },
+  { sym: 'BYTE PTR',    desc: '1バイト幅でメモリ参照',                     ex: 'BYTE PTR [rax]' },
+  { sym: 'DWORD PTR',   desc: '4バイト幅でメモリ参照',                     ex: 'DWORD PTR [rbp-4]' },
+  { sym: 'QWORD PTR',   desc: '8バイト幅でメモリ参照',                     ex: 'QWORD PTR [rsp]' },
+  { sym: 'cc',          desc: '条件コード (e=等, ne=不等, l=小, g=大…)',   ex: 'je, jne, jl, jg' },
+]
+
+const HELP_ROWS = computed(() => arch.value === 'x86' ? HELP_ROWS_X86 : HELP_ROWS_ARM)
 
 
 const step = computed(() => {

@@ -35,9 +35,10 @@ import type { Arch } from '@/core/types'
 
 const { arch, currentState, prevState, isReturnStep, returnReg, callArgCount } = useSimulator()
 
-const x86Regs = ['rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi']
+const x86Regs = ['rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15']
 const armRegs = ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
 const ARM_ARG_REGS = ['r0', 'r1', 'r2', 'r3']
+const X86_ARG_REGS = ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
 
 const registers = computed(() => {
   const names = arch.value === 'x86' ? x86Regs : armRegs
@@ -51,7 +52,8 @@ function argBadgeIndex(regName: string): number | null {
   if (isReturnStep.value) return null
   const count = callArgCount.value
   if (count === null) return null
-  const idx = ARM_ARG_REGS.indexOf(regName)
+  const argRegs = arch.value === 'x86' ? X86_ARG_REGS : ARM_ARG_REGS
+  const idx = argRegs.indexOf(regName)
   if (idx < 0 || idx >= count) return null
   return idx
 }

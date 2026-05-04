@@ -69,9 +69,17 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
-import { getFullName, getSyntax } from '@/core/arm/mnemonics'
+import { getFullName as getFullNameARM, getSyntax as getSyntaxARM } from '@/core/arm/mnemonics'
+import { getFullName as getFullNameX86, getSyntax as getSyntaxX86 } from '@/core/x86/mnemonics'
 
-const { currentStepData, preset } = useSimulator()
+const { arch, currentStepData, preset } = useSimulator()
+
+function getFullName(instr: string): string | undefined {
+  return arch.value === 'x86' ? getFullNameX86(instr) : getFullNameARM(instr)
+}
+function getSyntax(instr: string): string | undefined {
+  return arch.value === 'x86' ? getSyntaxX86(instr) : getSyntaxARM(instr)
+}
 
 const showHelp = ref(false)
 const helpWrapRef = ref<HTMLElement | null>(null)

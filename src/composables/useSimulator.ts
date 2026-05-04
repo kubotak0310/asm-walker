@@ -1,9 +1,11 @@
 import { ref, computed } from 'vue'
 import type { MachineState, Arch, PresetData } from '@/core/types'
-import { BASE_SP_ARM, BASE_PC_ARM } from '@/core/types'
+import { BASE_SP_ARM, BASE_PC_ARM, BASE_SP_X86, BASE_PC_X86 } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
 import { parseARM } from '@/core/arm/parser'
 import { traceProgram } from '@/core/arm/tracer'
+import { parseX86 } from '@/core/x86/parser'
+import { traceX86 } from '@/core/x86/tracer'
 import { adaptGodboltResponse } from '@/core/compiler'
 import type { GodboltResponse } from '@/core/compiler'
 
@@ -18,6 +20,19 @@ const INITIAL_STATE: MachineState = {
   flags: { zero: false, negative: false, carry: false, overflow: false },
   mode: 'thread',
   frames: [{ name: 'main', lo: BASE_SP_ARM, hi: BASE_SP_ARM, color: 'purple' }],
+}
+
+const X86_INITIAL_STATE: MachineState = {
+  regs: { rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rdi: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0 },
+  sp: BASE_SP_X86,
+  fp: 0,
+  lr: 0,
+  pc: BASE_PC_X86,
+  stack: {},
+  stackMeta: {},
+  flags: { zero: false, negative: false, carry: false, overflow: false },
+  mode: 'thread',
+  frames: [{ name: 'main', lo: BASE_SP_X86, hi: BASE_SP_X86, color: 'purple' }],
 }
 
 // ── Module-level state (singleton) ──────────────────────────────────────────
@@ -77,10 +92,18 @@ function parseArgCount(funcName: string, cCode: string[]): number | null {
   return null
 }
 
-const isReturnStep = computed(() => {
+function asmLineText(): string {
   const step = currentStepData.value
-  if (!step || step.asmLine < 0) return false
-  const text = (preset.value?.asmCode[step.asmLine]?.text ?? '').trim().toLowerCase()
+  if (!step || step.asmLine < 0) return ''
+  return (preset.value?.asmCode[step.asmLine]?.text ?? '').trim().toLowerCase()
+}
+
+const isReturnStep = computed(() => {
+  if (!currentStepData.value) return false
+  const text = asmLineText()
+  if (arch.value === 'x86') {
+    return text === 'ret' || text.startsWith('ret ')
+  }
   return (text.startsWith('bx') && text.includes('lr'))
     || (text.startsWith('pop') && text.includes('pc'))
     || (text.startsWith('ldm') && text.includes('pc'))
@@ -102,9 +125,14 @@ const returnHex = computed(() => hexU32(returnVal.value))
 const returnDec = computed(() => returnVal.value.toString(10))
 
 const callTarget = computed<string | null>(() => {
-  const step = currentStepData.value
-  if (!step || step.asmLine < 0) return null
-  const text = (preset.value?.asmCode[step.asmLine]?.text ?? '').trim().toLowerCase()
+  if (!currentStepData.value) return null
+  const text = asmLineText()
+  if (arch.value === 'x86') {
+    const m = text.match(/^call\s+(\S+)/)
+    if (!m || !m[1]) return null
+    if (m[1].includes('[') || m[1].includes('ptr')) return null
+    return m[1].split('(')[0] ?? null
+  }
   const m = text.match(/^blx?\s+(\w+)/)
   if (!m || !m[1]) return null
   if (/^(r\d+|sp|lr|pc|fp|ip|sl)$/.test(m[1])) return null
@@ -124,7 +152,9 @@ const callDisplay = computed<string | null>(() => {
   if (!name) return null
   const count = callArgCount.value
   if (count === null) return `${name}()`
-  const argRegs = ['r0', 'r1', 'r2', 'r3']
+  const argRegs = arch.value === 'x86'
+    ? ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
+    : ['r0', 'r1', 'r2', 'r3']
   const args = argRegs.slice(0, count).map(r => `${r}=${currentState.value.regs[r] ?? 0}`)
   return `${name}(${args.join(', ')})`
 })
@@ -204,16 +234,22 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         initialState: result.states[0] ?? INITIAL_STATE,
       }
     } else {
-      const asmLines = output.rawAsm.map(item => ({ text: item.text, isHeader: false }))
-      states.value = [INITIAL_STATE]
+      const parseResult = parseX86(output.asmText)
+      if (parseResult.errors.length > 0) {
+        compileError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
+        return
+      }
+      const result = traceX86(parseResult, X86_INITIAL_STATE, 500, output.cLineMap)
+      compileError.value = result.error ?? null
+      states.value = result.states
       preset.value = {
         id: 'compile',
         name: 'Cコンパイル結果 (x86)',
         arch: 'x86',
         cCode: cSourceLines,
-        asmCode: asmLines,
-        steps: [],
-        initialState: INITIAL_STATE,
+        asmCode: result.asmLines,
+        steps: result.steps,
+        initialState: result.states[0] ?? X86_INITIAL_STATE,
       }
     }
     currentStep.value = 0

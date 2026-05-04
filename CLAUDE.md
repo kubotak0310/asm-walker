@@ -62,21 +62,32 @@
 - インタープリタの `comment` / `effect` を `←` 記法で統一（`r0 ← 3`、`[r7+4]=0x20007fec ← r0(3)` 等）
 - ExplainPanel: 「命令詳細」ヘッダー追加、fullName と explain を1行に統合（`ADD : 加算`）、effect を独立行に配置
 
+### x86-64 ステップ実行実装（2026-05）で完了した機能
+- `src/core/x86/` ディレクトリを新規作成 — parser / interpreter / tracer / mnemonics の4ファイル
+- Intel構文（`-masm=intel`）で GCC x86-64 出力をパース・実行
+- 対応命令: MOV/LEA/PUSH/POP/ADD/SUB/IMUL/IDIV/CDQ/CQO/AND/OR/XOR/NOT/NEG/SHL/SHR/SAR/CMP/TEST/JMP/Jcc/CALL/RET/LEAVE/NOP/SETcc/XCHG（計30種以上）
+- サブレジスタ正規化: `eax/ax/al` → `rax` など全サブレジスタを64bit名に正規化
+- `useSimulator.ts`: `X86_INITIAL_STATE` 追加、`simulateCompiled` の x86 ブランチを parseX86 + traceX86 に接続
+- `isReturnStep` / `callTarget` / `callDisplay` を arch 対応に変更（x86: `ret` / `call` / rdi〜rcx 引数レジスタ）
+- `CCompilePanel.vue`: X86_SAMPLES を optgroup で追加、「⚠ x86 ステップ実行は未対応」警告を削除、ABI表示を arch 対応に
+- `RegisterPanel.vue`: x86 レジスタを r8〜r15 まで拡張、引数バッジを X86_ARG_REGS（rdi/rsi/rdx/rcx/r8/r9）で表示
+- `SpecialRegPanel.vue`: x86 時は RSP/RBP/RIP のラベルを表示（SP/FP/PC の代わり）
+- `ExplainPanel.vue`: arch に応じて ARM/x86 の mnemonics ファイルを切り替え
+- `src/samples/index.ts`: `X86_SAMPLES` 5種追加（ARM_SAMPLES と同じCコード、compilerId=x86-64g1420、extraFlags=-masm=intel）
+- `src/core/types.ts`: `BASE_PC_X86 = 0x401000` を追加
+
 ---
 
 ## フェーズ2以降の開発方針
 
-### ARM先行・x86後追い戦略
+### ARM先行・x86後追い戦略（完了）
 
-**フェーズ2・3はARM版を先に完成させ、その後x86版を移植する。**
+**ARM・x86 両アーキテクチャのステップ実行が完成した。**
 
-理由:
-- ARMの命令記法（`[SP, #8]`、`PUSH {R0, LR}` 等）がx86より複雑なため、ARM側でパーサー設計を固めてからx86に適用する方が手戻りが少ない
-- デバッグ実績があるのはARM側のみ
-- Cortex-M特化が本ツールの差別化ポイントであり、ARMを先に完成させた方が価値が早く出る
+次のフェーズでは x86 の品質向上（対応命令の拡充・エッジケース対応）や新機能を検討する。
 
-**ただし設計上の注意:**
-- 型定義・アーキ分岐構造はx86を見据えて最初から `'x86' | 'arm'` で作る
+**設計上の注意点（引き続き守ること）:**
+- 型定義・アーキ分岐構造は `'x86' | 'arm'` の2択を維持する
 - `src/core/simulator.ts` の「x86とARMの完全分離」ルールは維持する
 
 ---

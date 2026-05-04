@@ -7,16 +7,16 @@
       <template v-if="callTarget">
         <span class="text-blue-400 text-xs font-bold shrink-0">→ {{ callDisplay }}</span>
         <span class="text-blue-300 text-xs">呼び出し</span>
-        <span class="text-gray-300 text-xs hidden lg:inline">ARM ABI: r0〜r3 が引数レジスタ</span>
+        <span class="text-gray-300 text-xs hidden lg:inline">{{ arch === 'x86' ? 'x86-64 ABI: rdi〜r9 が引数レジスタ' : 'ARM ABI: r0〜r3 が引数レジスタ' }}</span>
       </template>
       <!-- ② return命令: 実行完了 + 戻り値 -->
       <template v-else-if="isReturnStep">
         <span class="text-green-400 text-xs font-bold shrink-0">✅ {{ currentFuncName }}() 実行完了</span>
         <span class="text-gray-500 text-xs">—</span>
         <span class="text-gray-300 text-xs">戻り値:</span>
-        <span class="text-yellow-200 text-xs font-bold font-mono">r0 = {{ returnHex }}</span>
+        <span class="text-yellow-200 text-xs font-bold font-mono">{{ returnReg }} = {{ returnHex }}</span>
         <span class="text-gray-300 text-xs">({{ returnDec }})</span>
-        <span class="text-gray-300 text-xs hidden lg:inline">ARM ABI: r0 が関数の戻り値レジスタ</span>
+        <span class="text-gray-300 text-xs hidden lg:inline">{{ arch === 'x86' ? 'x86-64 ABI: rax が戻り値レジスタ' : 'ARM ABI: r0 が関数の戻り値レジスタ' }}</span>
       </template>
       <!-- ③ 関数内実行中 -->
       <template v-else-if="currentStep > 0">
@@ -28,7 +28,6 @@
         <span class="text-green-400 text-xs font-bold shrink-0">✅ コンパイル成功</span>
         <span class="text-gray-500 text-xs">·</span>
         <span class="text-gray-400 text-xs font-mono truncate">{{ compilerDisplayName }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}</span>
-        <span v-if="!compilerId.includes('arm')" class="text-yellow-400 text-xs shrink-0">⚠ x86 ステップ実行は未対応</span>
       </template>
       <button
         class="ml-auto text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 px-3 py-1 rounded transition-colors shrink-0"
@@ -51,7 +50,12 @@
             @change="onSampleSelect"
           >
             <option value="" disabled hidden>サンプルを選択してください...</option>
-            <option v-for="s in ARM_SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
+            <optgroup label="ARM Cortex-M">
+              <option v-for="s in ARM_SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
+            </optgroup>
+            <optgroup label="x86-64">
+              <option v-for="s in X86_SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
+            </optgroup>
           </select>
           <!-- Compiler selector -->
           <select
@@ -123,12 +127,14 @@ import { cpp } from '@codemirror/lang-cpp'
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { useSimulator } from '@/composables/useSimulator'
-import { ARM_SAMPLES } from '@/samples'
+import { ARM_SAMPLES, X86_SAMPLES } from '@/samples'
 
 const {
-  simulateCompiled, compileError, isCompiling, setArch, currentStep, gccOutput,
-  isReturnStep, currentFuncName, returnHex, returnDec, callTarget, callDisplay,
+  arch, simulateCompiled, compileError, isCompiling, setArch, currentStep, gccOutput,
+  isReturnStep, currentFuncName, returnReg, returnHex, returnDec, callTarget, callDisplay,
 } = useSimulator()
+
+const ALL_SAMPLES = [...ARM_SAMPLES, ...X86_SAMPLES]
 
 const editorEl = ref<HTMLElement | null>(null)
 const compilerId = ref('carm1121')
@@ -194,7 +200,7 @@ watch(compileError, (err) => {
 })
 
 function onSampleSelect() {
-  const s = ARM_SAMPLES.find(s => s.id === selectedSampleId.value)
+  const s = ALL_SAMPLES.find(s => s.id === selectedSampleId.value)
   if (!s || !view) return
   view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: s.cCode } })
   compilerId.value = s.compilerId

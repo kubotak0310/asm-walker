@@ -38,12 +38,18 @@ asm-walker/
 │   │   ├── simulator.ts            # ステップ実行エンジン（applyUpdate / buildStates）
 │   │   ├── types.ts                # 共通型定義（MachineState, StepData, StackFrame 等）
 │   │   ├── compiler.ts             # Godbolt APIレスポンス → asmText + cLineMap 変換
-│   │   └── arm/
-│   │       ├── parser.ts           # ARMアセンブラ2パスパーサー（fp/sl/ip エイリアス・シフト・pre/post-indexed 対応）
-│   │       ├── interpreter.ts      # ParsedInstruction + MachineState → StateUpdate + 説明テキスト
-│   │       └── tracer.ts           # 動的実行でスナップショット列を生成（cLineMap 引数追加）
+│   │   ├── arm/
+│   │   │   ├── parser.ts           # ARMアセンブラ2パスパーサー（fp/sl/ip エイリアス・シフト・pre/post-indexed 対応）
+│   │   │   ├── interpreter.ts      # ParsedInstruction + MachineState → StateUpdate + 説明テキスト
+│   │   │   ├── tracer.ts           # 動的実行でスナップショット列を生成（cLineMap 引数追加）
+│   │   │   └── mnemonics.ts        # ARM命令フルネーム・構文フォーマットテーブル
+│   │   └── x86/
+│   │       ├── parser.ts           # x86-64 Intel構文パーサー（GCC -masm=intel 出力対応、サブレジスタ正規化）
+│   │       ├── interpreter.ts      # X86Instruction + MachineState → X86InterpretResult（30種以上の命令）
+│   │       ├── tracer.ts           # x86 動的実行トレーサー（CALL/RET スタック追跡）
+│   │       └── mnemonics.ts        # x86命令フルネーム・構文フォーマットテーブル
 │   ├── samples/
-│   │   └── index.ts                # ARMサンプル定義（SampleDef × 5種 — コンパイル可能なCコードテンプレート）
+│   │   └── index.ts                # ARM_SAMPLES / X86_SAMPLES（各5種、SampleDef型）
 │   ├── composables/
 │   │   └── useSimulator.ts         # シミュレーター・アーキ状態管理（Vue Composable、シングルトン）
 │   ├── App.vue
@@ -51,7 +57,7 @@ asm-walker/
 ├── public/
 ├── tests/
 │   ├── unit/
-│   │   ├── x86Simulator.test.ts    # applyUpdate / buildStates のユニットテスト
+│   │   ├── x86Simulator.test.ts    # applyUpdate / buildStates + parseX86 + traceX86 のテスト
 │   │   └── armSimulator.test.ts    # parseARM + traceProgram ベースのインラインテスト
 │   └── e2e/
 ├── api/

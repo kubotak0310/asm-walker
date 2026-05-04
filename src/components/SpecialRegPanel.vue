@@ -2,10 +2,10 @@
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
     <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">特殊レジスタ</div>
     <div class="p-2 space-y-1 font-mono text-xs">
-      <RegRow label="SP" :value="state.sp" :prev="prev?.sp" :changed="state.sp !== prev?.sp" kind="orange" />
-      <RegRow label="FP" :value="fpValue" :prev="prevFpValue" :changed="fpValue !== prevFpValue" kind="normal" />
+      <RegRow :label="arch === 'x86' ? 'RSP' : 'SP'" :value="state.sp" :prev="prev?.sp" :changed="state.sp !== prev?.sp" kind="orange" />
+      <RegRow :label="arch === 'x86' ? 'RBP' : 'FP'" :value="fpValue" :prev="prevFpValue" :changed="fpValue !== prevFpValue" kind="normal" />
       <RegRow v-if="arch === 'arm'" label="LR" :value="state.lr" :prev="prev?.lr" :changed="state.lr !== prev?.lr" :kind="isExcReturn ? 'exc' : 'normal'" />
-      <RegRow label="PC" :value="displayPc" :changed="displayPcChanged" kind="normal" />
+      <RegRow :label="arch === 'x86' ? 'RIP' : 'PC'" :value="displayPc" :changed="displayPcChanged" kind="normal" />
 
       <!-- Flags -->
       <div class="pt-1 border-t border-gray-700 mt-1">

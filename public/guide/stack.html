@@ -300,7 +300,7 @@ add rsp, 8        <span class="comment">; RSP += 8</span></code></pre>
 
   <div class="note">
     <strong>AsmWalker での確認</strong><br>
-    ExplainPanel（命令詳細パネル）に PUSH 命令の説明が表示されます。
+    命令詳細パネルに PUSH 命令の説明が表示されます。
     <code>rsp ← rsp - 8; [rsp] ← rbp</code> のように、SP 移動とメモリ書き込みの
     2ステップがひとつの命令として実行される様子を確認できます。
   </div>
@@ -352,7 +352,7 @@ add rsp, 8        <span class="comment">; RSP += 8</span></code></pre>
 
   <div class="note">
     <strong>AsmWalker での確認</strong><br>
-    SpecialRegPanel の「SP」欄でスタックポインタの値を確認できます。
+    特殊レジスタパネルの「SP」欄でスタックポインタの値を確認できます。
     PUSH を実行するたびに値が小さくなり（アドレスが下がり）、
     POP を実行すると値が大きくなる（アドレスが上がる）ことを確認してください。
   </div>

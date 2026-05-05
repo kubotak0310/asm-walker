@@ -162,7 +162,7 @@
 
   <div class="note">
     <strong>AsmWalker での確認</strong><br>
-    SpecialRegPanel（PC や SP が表示されるパネル）の下部に
+    特殊レジスタパネルの下部に
     <strong>Z / N / C / V</strong> のフラグ状態が表示されます。
     CMP 命令を実行した後でフラグが変化することを確認してください。
   </div>
@@ -283,7 +283,7 @@ jz   .even        <span class="comment">; Z=1 なら偶数</span></code></pre>
 
   <div class="note">
     <strong>AsmWalker での確認</strong><br>
-    CMP 命令のステップを実行した後、ExplainPanel（命令詳細）に
+    CMP 命令のステップを実行した後、命令詳細パネルに
     <code>flags: Z=0, N=0, C=0, V=0</code> のようなフラグ変化が表示されます。
     次の条件分岐命令がそのフラグを参照して分岐するかどうかを決めていることを確認してください。
   </div>
@@ -387,7 +387,7 @@ if (a &gt; b) {
     <strong>AsmWalker での確認</strong><br>
     条件分岐命令のステップで、アセンブラパネルのハイライトが次の行に進むか、
     ラベル先にジャンプするかを確認してください。
-    ExplainPanel には「Z=1 のため分岐しました」のような説明が表示されます。
+    命令詳細パネルには「Z=1 のため分岐しました」のような説明が表示されます。
   </div>
 
   <!-- 6 -->

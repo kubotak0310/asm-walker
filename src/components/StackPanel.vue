@@ -23,6 +23,7 @@
 import { computed } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
 import { hexU32 } from '@/core/simulator'
+import { BASE_ROM_DATA } from '@/core/types'
 
 const { currentState, prevState } = useSimulator()
 
@@ -43,7 +44,10 @@ const cells = computed<Cell[]>(() => {
   const prevAddrs = prev ? new Set(Object.keys(prev.stack).map(Number)) : new Set<number>()
 
   const addrSet = new Set<number>()
-  for (const a of Object.keys(state.stack).map(Number)) addrSet.add(a)
+  // ROM 疑似領域（リテラルプール）はスタックではないため表示しない
+  for (const a of Object.keys(state.stack).map(Number)) {
+    if (a < BASE_ROM_DATA) addrSet.add(a)
+  }
 
   // Fill all 4-byte slots within each frame (shows uninitialized reserved area)
   for (const frame of state.frames) {

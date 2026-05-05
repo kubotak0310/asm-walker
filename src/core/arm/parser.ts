@@ -115,7 +115,8 @@ function parseImmediate(s: string): number {
  * parseMnemonic("MOV")   // → { base: 'MOV', cond: 'AL', sFlag: false }
  */
 function parseMnemonic(word: string): { base: string; cond: string; sFlag: boolean } {
-  const upper = word.toUpperCase()
+  // Thumb-2 幅指定サフィックス（.w = wide, .n = narrow）は意味に影響しないため除去する
+  const upper = word.toUpperCase().replace(/\.(W|N)$/, '')
 
   if (upper === 'B') return { base: 'B', cond: 'AL', sFlag: false }
 

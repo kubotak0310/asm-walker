@@ -257,6 +257,7 @@ function handleDataTransfer(
   let val = srcVal >>> 0
   if (mnemonic === 'MVN') val = (~val) >>> 0
   const update: StateUpdate = { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 }
+  if (dst.name === 'sp') update.frames = updateTopFrame(val, state)
   if (sFlag) update.flags = computeFlags(val, val, 0, false)
   const comment = mnemonic === 'MVN'
     ? `${dst.name} ← ~${src?.type === 'reg' ? fmtRV(src.name, srcVal) : srcVal} = ${fmtDec(val)}`
@@ -634,7 +635,10 @@ function handleStack(
       sp += 4
     }
 
-    const frames = updateTopFrame(sp, state)
+    // pop {pc} は関数復帰 — トップフレームを削除する（bx lr と同じ処理）
+    const frames = retPhase
+      ? (state.frames.length > 1 ? state.frames.slice(0, -1) : [...state.frames])
+      : updateTopFrame(sp, state)
     const update: StateUpdate = { regs: newRegs, sp, stackRemove, metaRemove, frames, pc: BASE_PC + nextIdx * 4 }
     if (newLr !== undefined) update.lr = newLr
     return {

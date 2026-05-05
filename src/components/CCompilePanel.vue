@@ -31,7 +31,7 @@
       </template>
       <button
         class="ml-auto text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition-colors shrink-0 font-medium"
-        @click="hasResult = false"
+        @click="() => { clearSimulation(); hasResult = false }"
       >
         ✏ コードを編集
       </button>
@@ -127,6 +127,7 @@ import { SAMPLES } from '@/samples'
 const {
   arch, simulateCompiled, compileError, isCompiling, setArch, currentStep, gccOutput,
   isReturnStep, currentFuncName, returnReg, returnHex, returnDec, callTarget, callDisplay,
+  clearSimulation,
 } = useSimulator()
 
 const COMPILER_DEFAULT_FLAGS: Record<string, string> = {

@@ -317,6 +317,16 @@ function reset() {
 }
 
 /**
+ * コード編集モードに戻る際にシミュレーション結果を破棄する。
+ *
+ * preset を null にすることで totalSteps が 0 になり、ステップボタンが無効化される。
+ */
+function clearSimulation() {
+  preset.value = null
+  currentStep.value = 0
+}
+
+/**
  * レジスタ差分パネルの表示/非表示をトグルする。
  *
  * 現在は showDiff が `computed(() => false)` で固定されているため実質未使用。
@@ -449,6 +459,7 @@ export function useSimulator() {
     nextStep,
     prevStep,
     reset,
+    clearSimulation,
     toggleDiff,
     simulateCompiled,
   }

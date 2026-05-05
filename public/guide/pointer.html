@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ポインタとアセンブラ — AsmWalker ガイド</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+    .hl  { color: #c0392b; font-weight: bold; }
+    .hl2 { color: #2471a3; font-weight: bold; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    /* Memory diagram */
+    .mem-diagram {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.85rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+    .mem-row {
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .mem-row:last-child { border-bottom: none; }
+    .mem-addr {
+      background: #f0f0f0;
+      color: #555;
+      padding: 0.35rem 0.6rem;
+      min-width: 100px;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+    }
+    .mem-name {
+      background: #f8f4ff;
+      color: #5c35a0;
+      padding: 0.35rem 0.6rem;
+      min-width: 80px;
+      display: flex;
+      align-items: center;
+      font-size: 0.82rem;
+    }
+    .mem-val {
+      flex: 1;
+      padding: 0.35rem 0.8rem;
+      display: flex;
+      align-items: center;
+    }
+    .mem-ptr  { background: #f3e8ff; }
+    .mem-data { background: #e8f4fd; }
+    .mem-arr  { background: #e8fdf0; }
+
+    .subtitle { color: #666; font-size: 0.95rem; margin-top: 0.25rem; margin-bottom: 2rem; }
+    footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    nav.toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0 2rem; }
+    nav.toc h2 { font-size: 1rem; margin: 0 0 0.5rem; border: none; padding: 0; color: #555; }
+    nav.toc ol { margin: 0; padding-left: 1.3rem; }
+    nav.toc li { margin: 0.2rem 0; font-size: 0.93rem; }
+    nav.toc a { color: #0066cc; text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <h1>ポインタとアセンブラ</h1>
+  <p class="subtitle">AsmWalker ガイド — C のポインタがアセンブラではどう見えるか</p>
+
+  <div style="background:#f0f7ff; border:1px solid #b3d4f5; border-radius:8px; padding:1.2rem 1.5rem; margin:1.5rem 0; line-height:1.85;">
+    <p style="margin:0 0 0.7rem;">
+      C 言語を学ぶ人の多くが「ポインタの壁」に突き当たり、挫折します。
+      <code>*</code> と <code>&amp;</code> の意味はわかっても、なぜそう動くのかがつかめない——
+      そのもどかしさを感じたことがある人は少なくないはずです。
+    </p>
+    <p style="margin:0 0 0.7rem;">
+      ところが、アセンブラを一度見てしまうと景色が一変します。
+      ポインタは「アドレスという数値を入れたレジスタ」に過ぎず、
+      <code>*p</code> はそのアドレスのメモリを読み書きする命令に展開される——
+      たったそれだけの話です。
+      抽象的に見えたポインタが、メモリという具体的な実体と結びついた瞬間、
+      理解は一気に深まります。
+    </p>
+    <p style="margin:0 0 0.7rem;">
+      Python や JavaScript をはじめとする現代の高級言語は、
+      メモリの管理をランタイムに任せ、開発者から意図的に隠しています。
+      それ自体は生産性を高める賢い設計ですが、裏を返せば
+      「プログラムが実際にどう動いているか」を知る機会を奪ってもいます。
+    </p>
+    <p style="margin:0;">
+      C / C++ は今も<strong>メモリに直接触れることができる、数少ない言語</strong>です。
+      OS・組み込み・ゲームエンジン・言語処理系——
+      コンピュータの核心に触れるソフトウェアの多くが今もなお C/C++ で書かれているのは偶然ではありません。
+      ポインタとメモリの仕組みを理解することは、
+      使う言語を問わず Computer Science の土台になる知識です。
+      このガイドがその一歩になれば幸いです。
+    </p>
+  </div>
+
+  <nav class="toc">
+    <h2>目次</h2>
+    <ol>
+      <li><a href="#p1">ポインタとは「アドレスを格納した変数」</a></li>
+      <li><a href="#p2">アドレスの取得（&amp; 演算子）</a></li>
+      <li><a href="#p3">間接参照（* 演算子）とメモリアクセス命令</a></li>
+      <li><a href="#p4">ポインタを関数に渡す</a></li>
+      <li><a href="#p5">配列とポインタ</a></li>
+      <li><a href="#p6">ポインタ演算</a></li>
+      <li><a href="#p7">二重ポインタ</a></li>
+      <li><a href="#p8">まとめ</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="p1">1. ポインタとは「アドレスを格納した変数」</h2>
+
+  <p>
+    C 言語のポインタは、他の変数が置かれているメモリアドレスを保持する変数です。
+    アセンブラ視点で見ると、ポインタは<strong>「ただの整数値（アドレス）が入ったレジスタ」</strong>です。
+    特別な構文はなく、通常の数値と同じレジスタに保存されます。
+  </p>
+
+  <pre><code><span class="comment">// C言語</span>
+int  x = 42;
+int* p = &amp;x;   <span class="comment">// p は x のアドレスを保持</span></code></pre>
+
+  <p>これをアセンブラで表現すると、p はアドレス値が入ったレジスタ（またはスタック上の値）です。</p>
+
+  <!-- 2 -->
+  <h2 id="p2">2. アドレスの取得（&amp; 演算子）</h2>
+
+  <p>
+    C の <code>&amp;x</code> は「x が置かれているアドレスを求める」演算です。
+    アセンブラでは、スタック変数のアドレスを計算する命令（<code>lea</code> や <code>add</code>）で実現されます。
+  </p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — &amp;x の実現</h4>
+      <pre><code><span class="comment">; int x = 42 → [fp-4] に配置</span>
+mov  r3, #42
+str  r3, [fp, #-4]    <span class="comment">; x = 42</span>
+
+<span class="comment">; int *p = &amp;x</span>
+sub  r3, fp, #4       <span class="comment">; r3 = fp - 4 (x のアドレス)</span>
+str  r3, [fp, #-8]    <span class="comment">; p = &amp;x をスタックに保存</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — &amp;x の実現</h4>
+      <pre><code><span class="comment">; int x = 42 → [rbp-4] に配置</span>
+mov  DWORD PTR [rbp-4], 42  <span class="comment">; x = 42</span>
+
+<span class="comment">; int *p = &amp;x</span>
+lea  rax, [rbp-4]           <span class="comment">; rax = rbp - 4 (x のアドレス)</span>
+mov  QWORD PTR [rbp-16], rax <span class="comment">; p = &amp;x をスタックに保存</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    <code>lea</code>（Load Effective Address）は「アドレスを計算してレジスタに格納する」命令で、
+    メモリの中身は読まずにアドレス値そのものを返します。ARM の <code>sub r3, fp, #4</code> も同じ役割です。
+  </p>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    RegisterPanel でレジスタ値に<strong>紫色のハイライト</strong>が付く場合があります。
+    これはアドレスらしい値（スタック領域のアドレス範囲）が入っているレジスタを示します。
+    <code>&amp;x</code> を代入した直後に対応するレジスタが紫ハイライトになることを確認してください。
+  </div>
+
+  <!-- 3 -->
+  <h2 id="p3">3. 間接参照（* 演算子）とメモリアクセス命令</h2>
+
+  <p>
+    C の <code>*p</code> は「p が指すアドレスのメモリを読み書きする」間接参照（dereference）です。
+    アセンブラでは <strong>メモリアクセス命令</strong>（ARM: <code>LDR/STR</code>、x86: <code>MOV [...], ...</code>）として現れます。
+  </p>
+
+  <pre><code><span class="comment">// C言語</span>
+int x = 42;
+int* p = &amp;x;
+int y = *p;    <span class="comment">// p が指すアドレスの値を読む → y = 42</span>
+*p = 100;      <span class="comment">// p が指すアドレスに 100 を書く → x = 100</span></code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — 間接参照</h4>
+      <pre><code><span class="comment">; int y = *p</span>
+ldr  r3, [fp, #-8]    <span class="comment">; r3 = p（アドレス値）</span>
+ldr  r3, [r3]         <span class="comment">; r3 = *p（そのアドレスの内容）</span>
+str  r3, [fp, #-12]   <span class="comment">; y = *p</span>
+
+<span class="comment">; *p = 100</span>
+ldr  r3, [fp, #-8]    <span class="comment">; r3 = p（アドレス値）</span>
+mov  r2, #100
+str  r2, [r3]         <span class="comment">; *p = 100（そのアドレスに書き込み）</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — 間接参照</h4>
+      <pre><code><span class="comment">; int y = *p</span>
+mov  rax, QWORD PTR [rbp-16]  <span class="comment">; rax = p（アドレス値）</span>
+mov  eax, DWORD PTR [rax]     <span class="comment">; eax = *p（そのアドレスの内容）</span>
+mov  DWORD PTR [rbp-20], eax  <span class="comment">; y = *p</span>
+
+<span class="comment">; *p = 100</span>
+mov  rax, QWORD PTR [rbp-16]  <span class="comment">; rax = p（アドレス値）</span>
+mov  DWORD PTR [rax], 100     <span class="comment">; *p = 100（そのアドレスに書き込み）</span></code></pre>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>2回のメモリアクセスに注目</strong><br>
+    間接参照では必ず「1回目: ポインタ変数（アドレス値）を読む」「2回目: そのアドレスのデータを読み書き」という
+    2 段階の操作が発生します。これが直接変数アクセスより遅くなる場合がある理由のひとつです。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    ポインタ操作命令のステップ時に、アセンブラパネルの行左に
+    <strong>紫の「ptr」バッジ</strong>が表示されます。
+    このバッジはポインタを介したメモリアクセスを示すマーカーです。
+    スタックパネルでも対応するアドレスの値が変化することを確認してください。
+  </div>
+
+  <!-- 4 -->
+  <h2 id="p4">4. ポインタを関数に渡す</h2>
+
+  <p>
+    C でポインタを関数引数に渡すと、アセンブラでは「アドレス値を引数レジスタにコピーする」命令が生成されます。
+    関数の中でそのアドレスを使ってメモリを読み書きすると、呼び出し元の変数を直接変更できます。
+    これがいわゆる「参照渡し」の正体です。
+  </p>
+
+  <pre><code><span class="comment">// C言語</span>
+void double_it(int* p) {
+    *p = *p * 2;   <span class="comment">// 呼び出し元の変数を書き換え</span>
+}
+
+int main(void) {
+    int x = 5;
+    double_it(&amp;x);  <span class="comment">// x のアドレスを渡す → x が 10 になる</span>
+}</code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — 呼び出し側</h4>
+      <pre><code><span class="comment">; double_it(&amp;x) の呼び出し</span>
+sub  r0, fp, #8    <span class="comment">; r0 = &amp;x（アドレスを引数1へ）</span>
+bl   double_it     <span class="comment">; 関数呼び出し</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — 呼び出し側</h4>
+      <pre><code><span class="comment">; double_it(&amp;x) の呼び出し</span>
+lea  rdi, [rbp-4]  <span class="comment">; rdi = &amp;x（アドレスを第1引数へ）</span>
+call double_it     <span class="comment">; 関数呼び出し</span></code></pre>
+    </div>
+  </div>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — 呼ばれた側（double_it）</h4>
+      <pre><code><span class="comment">; r0 = &amp;x が渡ってきている</span>
+ldr  r3, [r0]      <span class="comment">; r3 = *p（x の値を読む）</span>
+mov  r2, r3, lsl #1 <span class="comment">; r2 = r3 * 2</span>
+str  r2, [r0]      <span class="comment">; *p = r2（x を書き換え）</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — 呼ばれた側（double_it）</h4>
+      <pre><code><span class="comment">; rdi = &amp;x が渡ってきている</span>
+mov  eax, DWORD PTR [rdi]   <span class="comment">; eax = *p</span>
+add  eax, eax               <span class="comment">; eax *= 2</span>
+mov  DWORD PTR [rdi], eax   <span class="comment">; *p = eax（x を書き換え）</span></code></pre>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    関数呼び出し前と後でスタックパネルの <code>x</code> の値が変化することを確認してください。
+    「引数バッジ」（青）が r0 または rdi に表示されたとき、その値がアドレスであることを
+    RegisterPanel の紫ハイライトで識別できます。
+  </div>
+
+  <!-- 5 -->
+  <h2 id="p5">5. 配列とポインタ</h2>
+
+  <p>
+    C では配列名はその先頭要素へのポインタと同じように扱われます。
+    アセンブラでは「配列の先頭アドレス + インデックス × 要素サイズ」の計算が明示的に現れます。
+  </p>
+
+  <pre><code><span class="comment">// C言語</span>
+int arr[3] = {10, 20, 30};
+int v = arr[2];   <span class="comment">// 先頭から 2 * 4 = 8 バイト先を読む</span></code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — 配列アクセス</h4>
+      <pre><code><span class="comment">; arr の先頭アドレスを取得</span>
+sub  r3, fp, #20   <span class="comment">; r3 = &amp;arr[0]</span>
+
+<span class="comment">; arr[2] にアクセス (オフセット = 2 * 4 = 8)</span>
+ldr  r3, [r3, #8]  <span class="comment">; r3 = arr[2]</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — 配列アクセス</h4>
+      <pre><code><span class="comment">; arr の先頭アドレスを取得</span>
+lea  rax, [rbp-16]          <span class="comment">; rax = &amp;arr[0]</span>
+
+<span class="comment">; arr[2] にアクセス (オフセット = 2 * 4 = 8)</span>
+mov  eax, DWORD PTR [rax+8] <span class="comment">; eax = arr[2]</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    ループで配列を走査するとき、インデックス計算（<code>index * 4</code>）がアセンブラ上で
+    シフト命令（<code>lsl #2</code>）や <code>SIB</code> アドレッシングとして現れることがあります。
+  </p>
+
+  <pre><code><span class="comment">; x86-64: arr[i] へのアドレッシング（SIB 形式）</span>
+mov  eax, DWORD PTR [rax + rcx*4]
+<span class="comment">;                         ↑ index × sizeof(int) を CPU が自動計算</span></code></pre>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    配列要素へのアクセス命令には<strong>緑の「arr」バッジ</strong>が表示されます。
+    スタックパネルでも配列の各セルが緑色でハイライトされ、どのセルにアクセスしているかが視覚的にわかります。
+  </div>
+
+  <!-- 6 -->
+  <h2 id="p6">6. ポインタ演算</h2>
+
+  <p>
+    ポインタに整数を加算すると、<strong>要素サイズ分だけアドレスが移動</strong>します。
+    これがポインタ演算です。アセンブラには要素サイズの乗算が直接現れます。
+  </p>
+
+  <pre><code><span class="comment">// C言語</span>
+int arr[5] = {1, 2, 3, 4, 5};
+int* p = arr;      <span class="comment">// p → arr[0]</span>
+p = p + 2;         <span class="comment">// p → arr[2]（アドレスは + 2*4 = +8）</span>
+int v = *p;        <span class="comment">// v = 3</span></code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — ポインタ演算</h4>
+      <pre><code><span class="comment">; p = p + 2  (int* なので +8 バイト)</span>
+ldr  r3, [fp, #-8]    <span class="comment">; r3 = p</span>
+add  r3, r3, #8       <span class="comment">; r3 += 2 * sizeof(int)</span>
+str  r3, [fp, #-8]    <span class="comment">; p = r3</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — ポインタ演算</h4>
+      <pre><code><span class="comment">; p = p + 2  (int* なので +8 バイト)</span>
+mov  rax, QWORD PTR [rbp-16]  <span class="comment">; rax = p</span>
+add  rax, 8                   <span class="comment">; rax += 2 * sizeof(int)</span>
+mov  QWORD PTR [rbp-16], rax  <span class="comment">; p = rax</span></code></pre>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>ポインタ演算の単位はバイトではなく要素数</strong><br>
+    C では <code>p + 1</code> は「アドレス + 1」ではなく「アドレス + sizeof(*p)」です。
+    アセンブラレベルでは常にバイト単位で計算されるため、C の <code>p + 2</code> は
+    <code>int*</code> なら <code>+8</code>、<code>char*</code> なら <code>+2</code> になります。
+  </div>
+
+  <!-- 7 -->
+  <h2 id="p7">7. 二重ポインタ</h2>
+
+  <p>
+    二重ポインタ（<code>int**</code>）は「ポインタへのポインタ」、つまりアドレスのアドレスです。
+    アセンブラでは 3 段階のメモリアクセスとして現れます。
+  </p>
+
+  <pre><code><span class="comment">// C言語</span>
+int  x  = 42;
+int* p  = &amp;x;
+int** pp = &amp;p;
+
+int v = **pp;   <span class="comment">// pp → p → x の値を読む</span></code></pre>
+
+  <div class="arch-box arch-x86" style="margin: 1rem 0;">
+    <h4>x86-64 — 二重ポインタの逆参照</h4>
+    <pre><code><span class="comment">; v = **pp</span>
+mov  rax, QWORD PTR [rbp-32]   <span class="comment">; rax = pp（アドレスのアドレス）</span>
+mov  rax, QWORD PTR [rax]      <span class="comment">; rax = *pp = p（アドレス）</span>
+mov  eax, DWORD PTR [rax]      <span class="comment">; eax = **pp = x（値）</span></code></pre>
+  </div>
+
+  <p>
+    このように、参照を重ねるたびにメモリアクセスが 1 回追加されます。
+    実際の C プログラムでは引数の配列（<code>char** argv</code>）や
+    リンクリストの更新（<code>Node**</code>）などで二重ポインタが頻繁に登場します。
+  </p>
+
+  <!-- 8 -->
+  <h2 id="p8">8. まとめ</h2>
+
+  <table>
+    <thead>
+      <tr><th>C の操作</th><th>アセンブラでの対応</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>&amp;x</code>（アドレス取得）</td><td><code>lea rax, [rbp-4]</code> / <code>sub r3, fp, #4</code> — アドレス計算</td></tr>
+      <tr><td><code>*p</code>（読み出し）</td><td><code>mov eax, [rax]</code> / <code>ldr r3, [r3]</code> — メモリロード</td></tr>
+      <tr><td><code>*p = v</code>（書き込み）</td><td><code>mov [rax], eax</code> / <code>str r3, [r3]</code> — メモリストア</td></tr>
+      <tr><td><code>p + n</code>（ポインタ演算）</td><td><code>add rax, n * sizeof(*p)</code> — バイト単位加算</td></tr>
+      <tr><td><code>arr[i]</code>（配列アクセス）</td><td><code>[base + i * size]</code> — ベース＋オフセット計算</td></tr>
+      <tr><td><code>**pp</code>（二重逆参照）</td><td>メモリアクセス 3 回（pp → p → 値）</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    アセンブラで見ると、ポインタは「アドレスが入ったレジスタ」に過ぎません。
+    間接参照のたびに追加のメモリアクセスが発生するという事実を理解すると、
+    ポインタのコストとバグの原因がよりクリアに見えてきます。
+  </p>
+
+  <footer>
+    AsmWalker ガイド
+  </footer>
+
+</body>
+</html>

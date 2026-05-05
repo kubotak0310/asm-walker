@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アセンブラの読み方 — AsmWalker ガイド</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+    .hl { color: #c0392b; font-weight: bold; }
+    .hl2 { color: #2471a3; font-weight: bold; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    .instr-anatomy {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 1.1rem;
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1.2rem 1.5rem;
+      margin: 1rem 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      flex-wrap: wrap;
+    }
+    .ia-part { display: flex; flex-direction: column; align-items: center; }
+    .ia-code { padding: 0.2em 0.4em; border-radius: 3px; }
+    .ia-label { font-size: 0.72rem; color: #666; font-family: sans-serif; margin-top: 0.3em; white-space: nowrap; }
+    .ia-sep { padding: 0.2em 0.2em; color: #aaa; align-self: flex-start; margin-top: 0.2em; }
+    .ia-mnemonic { background: #fde8e8; color: #c0392b; }
+    .ia-dest     { background: #dceefb; color: #1a5276; }
+    .ia-src      { background: #d5f5e3; color: #1e8449; }
+    .ia-imm      { background: #fef9e7; color: #7d6608; }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+  </style>
+</head>
+<body>
+
+  <h1>アセンブラの読み方</h1>
+  <p>アセンブラは難しそうに見えますが、基本的なルールを押さえると読めるようになります。C言語と比べながら、代表的な命令を一つずつ確認しましょう。</p>
+
+  <div class="toc">
+    <h4>目次</h4>
+    <ol>
+      <li><a href="#structure">命令の基本構造</a></li>
+      <li><a href="#direction">読む方向：左が行き先、右が元</a></li>
+      <li><a href="#registers">レジスタとは何か</a></li>
+      <li><a href="#mov">MOV — 値を運ぶ命令</a></li>
+      <li><a href="#arith">ADD / SUB — 足し算・引き算</a></li>
+      <li><a href="#memory">メモリアクセス — LDR/STR（ARM）と [ ]（x86）</a></li>
+      <li><a href="#cmp">CMP — 比較命令</a></li>
+      <li><a href="#push-pop">PUSH / POP — スタック操作</a></li>
+      <li><a href="#tips">読むコツまとめ</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="structure">1. 命令の基本構造</h2>
+
+  <p>アセンブラの1行は <strong>ニモニック（命令名）</strong> と <strong>オペランド（対象）</strong> から成ります。</p>
+
+  <div class="instr-anatomy">
+    <div class="ia-part">
+      <span class="ia-code ia-mnemonic">MOV</span>
+      <span class="ia-label">ニモニック<br>（何をするか）</span>
+    </div>
+    <span class="ia-sep">&nbsp;</span>
+    <div class="ia-part">
+      <span class="ia-code ia-dest">rax</span>
+      <span class="ia-label">第1オペランド<br>（行き先）</span>
+    </div>
+    <span class="ia-sep">,&nbsp;</span>
+    <div class="ia-part">
+      <span class="ia-code ia-imm">5</span>
+      <span class="ia-label">第2オペランド<br>（元）</span>
+    </div>
+  </div>
+
+  <p>ニモニックは命令の略称です。<code>MOV</code> は MOVE（移動）、<code>ADD</code> は ADD（加算）、<code>STR</code> は STORE（格納）のように、英単語の略になっています。</p>
+
+  <div class="key">
+    <strong>ニモニックを覚えるコツ：</strong><br>
+    完全な英単語を意識すると覚えやすくなります。<code>MOV</code>=Move, <code>CMP</code>=Compare, <code>LDR</code>=Load Register, <code>STR</code>=Store Register, <code>BL</code>=Branch with Link（サブルーチン呼び出し）。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="direction">2. 読む方向：左が行き先、右が元</h2>
+
+  <p>このツールが扱う2つのアーキテクチャはどちらも <strong>「左 ← 右」</strong> の順です。</p>
+
+  <table>
+    <thead>
+      <tr><th>アーキテクチャ</th><th>例</th><th>読み方</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>x86-64（Intel構文）</td>
+        <td><code>mov rax, 5</code></td>
+        <td>rax に 5 を入れる</td>
+      </tr>
+      <tr>
+        <td>ARM</td>
+        <td><code>mov r0, #5</code></td>
+        <td>r0 に 5 を入れる</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>AT&amp;T 構文（GCC デフォルト）との違い：</strong><br>
+    Linux などで <code>gcc -S</code> を使うと AT&amp;T 構文が出力され、順序が逆（右 → 左）になります。
+    <code>movl $5, %eax</code> は「eax に 5 を入れる」で意味は同じですが読む方向が違います。
+    AsmWalker は Intel 構文（<code>-masm=intel</code>）を採用しているため、左が行き先で統一されています。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="registers">3. レジスタとは何か</h2>
+
+  <p>レジスタは CPU の中にある超高速な変数です。C言語の変数はメモリに置かれますが、レジスタは CPU チップ上にあるため、メモリアクセスより桁違いに速いです。</p>
+
+  <h3>x86-64 の主なレジスタ</h3>
+  <table>
+    <thead>
+      <tr><th>64bit 名</th><th>32bit 名</th><th>16bit 名</th><th>8bit 名</th><th>主な用途</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>rax</code></td><td><code>eax</code></td><td><code>ax</code></td><td><code>al</code></td><td>計算・関数戻り値</td></tr>
+      <tr><td><code>rbx</code></td><td><code>ebx</code></td><td><code>bx</code></td><td><code>bl</code></td><td>汎用</td></tr>
+      <tr><td><code>rcx</code></td><td><code>ecx</code></td><td><code>cx</code></td><td><code>cl</code></td><td>カウンタ・第4引数</td></tr>
+      <tr><td><code>rdx</code></td><td><code>edx</code></td><td><code>dx</code></td><td><code>dl</code></td><td>乗除算・第3引数</td></tr>
+      <tr><td><code>rdi</code></td><td><code>edi</code></td><td><code>di</code></td><td><code>dil</code></td><td>第1引数</td></tr>
+      <tr><td><code>rsi</code></td><td><code>esi</code></td><td><code>si</code></td><td><code>sil</code></td><td>第2引数</td></tr>
+      <tr><td><code>rsp</code></td><td><code>esp</code></td><td>—</td><td>—</td><td>スタックポインタ</td></tr>
+      <tr><td><code>rbp</code></td><td><code>ebp</code></td><td>—</td><td>—</td><td>フレームポインタ</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>eax と rax は同じレジスタ：</strong><br>
+    <code>rax</code>（64bit）の下位32bitが <code>eax</code>、下位16bitが <code>ax</code>、下位8bitが <code>al</code> です。
+    <code>int</code>（32bit）型の値を扱うとき GCC は <code>eax</code> を使います。
+    <code>eax</code> に書き込むと上位32bitは自動的にゼロになります。
+  </div>
+
+  <h3>ARM の主なレジスタ</h3>
+  <table>
+    <thead>
+      <tr><th>名前</th><th>別名</th><th>主な用途</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>r0</code></td><td>—</td><td>第1引数 / 関数戻り値</td></tr>
+      <tr><td><code>r1</code></td><td>—</td><td>第2引数</td></tr>
+      <tr><td><code>r2</code></td><td>—</td><td>第3引数</td></tr>
+      <tr><td><code>r3</code></td><td>—</td><td>第4引数</td></tr>
+      <tr><td><code>r4〜r11</code></td><td>—</td><td>汎用（呼び出し先保存）</td></tr>
+      <tr><td><code>r13</code></td><td><code>sp</code></td><td>スタックポインタ</td></tr>
+      <tr><td><code>r14</code></td><td><code>lr</code></td><td>リンクレジスタ（戻り先アドレス）</td></tr>
+      <tr><td><code>r15</code></td><td><code>pc</code></td><td>プログラムカウンタ</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="mov">4. MOV — 値を運ぶ命令</h2>
+
+  <p>最も頻出の命令です。レジスタ間のコピー、即値のセット、メモリからの読み書きに使います。</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>mov r0, #3       <span class="comment">; r0 = 3（即値）</span>
+mov r1, r0       <span class="comment">; r1 = r0（レジスタコピー）</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">ARM では即値に <code>#</code> を付ける。</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>mov eax, 3       <span class="comment">; eax = 3（即値）</span>
+mov ebx, eax     <span class="comment">; ebx = eax（レジスタコピー）</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">x86 Intel 構文では即値に <code>#</code> は付けない。</p>
+    </div>
+  </div>
+
+  <p>C言語との対応イメージ：</p>
+  <pre><code>int a = 3;   →   mov eax, 3        <span class="comment">; eax が変数 a に対応</span>
+int b = a;   →   mov ebx, eax      <span class="comment">; ebx が変数 b に対応</span></code></pre>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    MOV 命令のステップでは命令詳細パネルに <code>rax ← 3</code> のような表記で値の流れが示されます。
+    同時にレジスタパネルで変化したレジスタが白くハイライトされます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="arith">5. ADD / SUB — 足し算・引き算</h2>
+
+  <p>2つの値を加減算して結果を第1オペランドに書き戻します。</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>add r0, r1, r2   <span class="comment">; r0 = r1 + r2</span>
+sub r0, r0, #1   <span class="comment">; r0 = r0 - 1</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">ARM は3オペランド形式が多い（行き先を明示）。</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>add eax, edx     <span class="comment">; eax = eax + edx</span>
+sub eax, 1       <span class="comment">; eax = eax - 1</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">x86 は2オペランド形式（行き先 = 行き先 OP 元）。</p>
+    </div>
+  </div>
+
+  <pre><code><span class="comment">; C: int result = a + b;</span>
+<span class="comment">; x86-64 での展開例</span>
+mov  edx, DWORD PTR [rbp-4]   <span class="comment">; edx = a（メモリから読み出し）</span>
+mov  eax, DWORD PTR [rbp-8]   <span class="comment">; eax = b</span>
+add  eax, edx                  <span class="comment">; eax = a + b</span></code></pre>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    ADD ステップの命令詳細パネルに <code>eax ← eax(3) + edx(5) = 8</code> のように
+    計算前後の値が表示されます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="memory">6. メモリアクセス — LDR/STR（ARM）と [ ]（x86）</h2>
+
+  <p>レジスタはCPU内の一時置き場なので、変数の値を永続的に保持するにはメモリへの読み書きが必要です。</p>
+
+  <h3>読み込み（Load）</h3>
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — LDR（Load Register）</h4>
+      <pre><code>ldr r0, [r7, #4]  <span class="comment">; r0 = メモリ[r7+4]</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;"><code>[ ]</code> の中がメモリアドレス。ベースレジスタ＋オフセット。</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86 — MOV + [ ]</h4>
+      <pre><code>mov eax, DWORD PTR [rbp-4]
+<span class="comment">; eax = メモリ[rbp-4]（4バイト読み出し）</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;"><code>DWORD PTR</code> は4バイト幅を指定。</p>
+    </div>
+  </div>
+
+  <h3>書き込み（Store）</h3>
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — STR（Store Register）</h4>
+      <pre><code>str r0, [r7, #4]  <span class="comment">; メモリ[r7+4] = r0</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">LDR と逆。r0 の値をメモリに保存する。</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86 — MOV + [ ] （行き先がメモリ側）</h4>
+      <pre><code>mov DWORD PTR [rbp-4], eax
+<span class="comment">; メモリ[rbp-4] = eax（4バイト書き込み）</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">x86 は MOV1つでロードもストアも表現する。</p>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>[ ] の中の読み方：</strong><br>
+    <code>[rbp-4]</code> や <code>[r7, #8]</code> はアドレスの計算式です。
+    <code>rbp-4</code> なら「rbp の値から 4 を引いたアドレス」を意味します。
+    これはローカル変数がフレームポインタからの固定オフセットに配置されているためです。
+    変数が増えるごとにオフセット（-4, -8, -12…）が増えていきます。
+  </div>
+
+  <h3>メモリサイズの指定（x86）</h3>
+  <table>
+    <thead>
+      <tr><th>指定子</th><th>サイズ</th><th>対応するC型</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>BYTE PTR</code></td><td>1バイト</td><td><code>char</code></td></tr>
+      <tr><td><code>WORD PTR</code></td><td>2バイト</td><td><code>short</code></td></tr>
+      <tr><td><code>DWORD PTR</code></td><td>4バイト</td><td><code>int</code>, <code>float</code></td></tr>
+      <tr><td><code>QWORD PTR</code></td><td>8バイト</td><td><code>long</code>, <code>double</code>, ポインタ</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    LDR/STR（ARM）や <code>mov [...], reg</code>（x86）のステップでは
+    スタックパネルの該当アドレスのセルがハイライトされ、値の変化が確認できます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="cmp">7. CMP — 比較命令</h2>
+
+  <p>CMP は引き算を行いますが、<strong>結果をレジスタに書かず、フラグだけを更新</strong>します。</p>
+
+  <pre><code>cmp eax, 5    <span class="comment">; eax - 5 を計算してフラグを更新（eax は変わらない）</span>
+je  .L1       <span class="comment">; Zero Flag が立っていれば .L1 へジャンプ（eax == 5）</span></code></pre>
+
+  <p>フラグレジスタは演算結果の性質を記録する1bitのフラグ群です。</p>
+
+  <table>
+    <thead>
+      <tr><th>フラグ</th><th>意味</th><th>立つ条件</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Zero Flag (ZF)</td><td>結果がゼロ</td><td><code>cmp eax, eax</code>（同値比較）</td></tr>
+      <tr><td>Negative Flag (NF)</td><td>結果が負</td><td><code>cmp eax, 10</code> で eax &lt; 10</td></tr>
+      <tr><td>Carry Flag (CF)</td><td>桁あふれ（符号なし）</td><td>符号なし演算のオーバーフロー</td></tr>
+      <tr><td>Overflow Flag (OF)</td><td>桁あふれ（符号あり）</td><td>符号あり演算のオーバーフロー</td></tr>
+    </tbody>
+  </table>
+
+  <p>CMP の後に続く条件ジャンプ命令がこのフラグを参照します。</p>
+
+  <table>
+    <thead>
+      <tr><th>x86</th><th>ARM</th><th>条件</th><th>フラグ</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>je</code></td><td><code>beq</code></td><td>等しい（==）</td><td>ZF=1</td></tr>
+      <tr><td><code>jne</code></td><td><code>bne</code></td><td>等しくない（!=）</td><td>ZF=0</td></tr>
+      <tr><td><code>jl</code></td><td><code>blt</code></td><td>小さい（&lt;）</td><td>NF≠OF</td></tr>
+      <tr><td><code>jg</code></td><td><code>bgt</code></td><td>大きい（&gt;）</td><td>ZF=0 かつ NF=OF</td></tr>
+      <tr><td><code>jle</code></td><td><code>ble</code></td><td>以下（&lt;=）</td><td>ZF=1 または NF≠OF</td></tr>
+      <tr><td><code>jge</code></td><td><code>bge</code></td><td>以上（&gt;=）</td><td>NF=OF</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="comment">; C: if (a > 0) { ... }</span>
+cmp eax, 0    <span class="comment">; a - 0 のフラグを計算</span>
+jle .L_else   <span class="comment">; a &lt;= 0 なら else へジャンプ</span>
+<span class="comment">; ↑ if の中身</span>
+.L_else:</code></pre>
+
+  <div class="key">
+    <strong>読み解くコツ：</strong><br>
+    コンパイラは <code>if (a &gt; 0)</code> の条件を <strong>反転</strong> して <code>jle</code>（以下ならスキップ）を生成することが多いです。
+    「条件が成立しないときにジャンプ」という発想で読むと理解しやすくなります。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    CMP ステップの命令詳細パネルでは更新されるフラグ（ZF / NF など）が表示されます。
+    続く条件ジャンプのステップで、ジャンプが発生するかどうかを確認できます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="push-pop">8. PUSH / POP — スタック操作</h2>
+
+  <p>PUSH はスタックに値を積み、POP は取り出します。スタックポインタ（SP / RSP）が自動的に動きます。</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>push {r7, lr}  <span class="comment">; r7 と lr をスタックに保存</span>
+               <span class="comment">; sp -= 8</span>
+
+pop  {r7, pc}  <span class="comment">; r7 と pc を復元</span>
+               <span class="comment">; sp += 8</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">複数レジスタを一度に保存・復元できる。</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>push rbp       <span class="comment">; [rsp-8] = rbp, rsp -= 8</span>
+
+pop  rbp       <span class="comment">; rbp = [rsp], rsp += 8</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">1レジスタずつ操作する。</p>
+    </div>
+  </div>
+
+  <p>PUSH/POP は関数のプロローグ・エピローグで必ず登場します。「呼び出し元のレジスタ値を壊さないように保存して、帰りに復元する」という用途です。</p>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    PUSH のステップではスタックパネルに新しいセルが追加され、SP が下方向に動くのが見えます。
+    POP では逆にセルが消えて SP が上に戻ります。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="tips">9. 読むコツまとめ</h2>
+
+  <ol>
+    <li><strong>左 → 右 の順で「どこに何を入れるか」を読む</strong>（Intel 構文 / ARM 共通）</li>
+    <li><strong><code>[ ]</code> はメモリ参照の印</strong>。カッコの中はアドレスの計算式</li>
+    <li><strong>命令名は英単語の略</strong>。知らない命令は略を展開して考える（<code>MOV</code>=Move, <code>LDR</code>=Load Register）</li>
+    <li><strong>CMP の後に条件ジャンプ</strong>がセットで登場する。条件は反転していることが多い</li>
+    <li><strong>関数の入り口と出口は決まったパターン</strong>（プロローグ: <code>push rbp / mov rbp, rsp</code>、エピローグ: <code>pop rbp / ret</code>）</li>
+    <li><strong>即値に <code>#</code> が付くのは ARM だけ</strong>。x86 Intel 構文では付かない</li>
+    <li><strong>全部読まなくてよい</strong>。着目している変数が入っているレジスタだけ追うと理解が速い</li>
+  </ol>
+
+  <div class="note">
+    <strong>AsmWalker での使い方：</strong><br>
+    サンプルを選んでコンパイルし、ステップ実行しながらこのページを横に置いておくと、
+    命令を1つずつ確認しながら読み進めることができます。
+    命令詳細パネルの「フル命令名」と「構文フォーマット」も参考にしてください。
+  </div>
+
+  <footer>
+    AsmWalker ガイド
+  </footer>
+
+</body>
+</html>

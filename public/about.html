@@ -50,14 +50,10 @@
       border-radius: 0 4px 4px 0;
       font-size: 0.93rem;
     }
-    .back { display: inline-block; margin-bottom: 1.5rem; color: #0066cc; text-decoration: none; font-size: 0.93rem; }
-    .back:hover { text-decoration: underline; }
     footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
   </style>
 </head>
 <body>
-
-  <a class="back" href="/">← ツールに戻る</a>
 
   <h1>AsmWalker について</h1>
   <p>AsmWalker は、C言語とアセンブラの対応を1命令ずつ確認しながら学べるブラウザ学習ツールです。</p>
@@ -133,6 +129,21 @@
   </p>
   <p>対応命令（x86-64）: <code>MOV / LEA / PUSH / POP / ADD / SUB / IMUL / IDIV / AND / OR / XOR / SHL / SHR / CMP / TEST / JMP / Jcc / CALL / RET / LEAVE</code> ほか</p>
   <p>対応命令（ARM）: <code>MOV / LDR / STR / ADD / SUB / MUL / CMP / B / BL / BX / PUSH / POP / LSL / LSR</code> ほか</p>
+
+  <h2>学習ガイド</h2>
+  <p>アセンブラの仕組みをより深く理解するための解説ページを用意しています。</p>
+  <table>
+    <thead>
+      <tr><th>ガイド</th><th>内容</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><a href="/guide/function-call.html">関数呼び出しの仕組み</a></td><td>引数の渡し方・戻り先アドレス・スタックフレーム・戻り値の返し方</td></tr>
+      <tr><td><a href="/guide/asm-reading.html">アセンブラの読み方</a></td><td>MOV / ADD / LDR / CMP / PUSH など代表的な命令の読み方と構文解説</td></tr>
+      <tr><td><a href="/guide/stack.html">スタックの仕組み</a></td><td>PUSH/POP の正体・スタックポインタ・ローカル変数の確保と解放</td></tr>
+      <tr><td><a href="/guide/pointer.html">ポインタとアセンブラ</a></td><td>C のポインタがアセンブラでどう見えるか・間接参照・配列アクセス</td></tr>
+      <tr><td><a href="/guide/branch.html">条件分岐とフラグレジスタ</a></td><td>Z/N/C/V フラグ・CMP/TEST・if-else・ループの翻訳パターン</td></tr>
+    </tbody>
+  </table>
 
   <h2>技術構成</h2>
   <table>

@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>条件分岐とフラグレジスタ — AsmWalker ガイド</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+    .hl  { color: #c0392b; font-weight: bold; }
+    .hl2 { color: #2471a3; font-weight: bold; }
+    .hl3 { color: #1a7340; font-weight: bold; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    /* Flag display */
+    .flags-box {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin: 0.8rem 0;
+    }
+    .flag {
+      border: 2px solid #ccc;
+      border-radius: 6px;
+      padding: 0.4rem 0.8rem;
+      text-align: center;
+      min-width: 80px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88rem;
+    }
+    .flag-name { font-weight: bold; font-size: 1rem; }
+    .flag-desc { color: #666; font-size: 0.8rem; }
+    .flag-z { border-color: #2196f3; background: #e8f4fd; }
+    .flag-n { border-color: #9c27b0; background: #f3e8ff; }
+    .flag-c { border-color: #ff9800; background: #fff3e0; }
+    .flag-v { border-color: #f44336; background: #fdecea; }
+
+    .flow-box {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.86rem;
+      line-height: 2;
+      margin: 1rem 0;
+    }
+
+    .subtitle { color: #666; font-size: 0.95rem; margin-top: 0.25rem; margin-bottom: 2rem; }
+    footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    nav.toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0 2rem; }
+    nav.toc h2 { font-size: 1rem; margin: 0 0 0.5rem; border: none; padding: 0; color: #555; }
+    nav.toc ol { margin: 0; padding-left: 1.3rem; }
+    nav.toc li { margin: 0.2rem 0; font-size: 0.93rem; }
+    nav.toc a { color: #0066cc; text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <h1>条件分岐とフラグレジスタ</h1>
+  <p class="subtitle">AsmWalker ガイド — if 文・ループがアセンブラではどう動くか</p>
+
+  <nav class="toc">
+    <h2>目次</h2>
+    <ol>
+      <li><a href="#b1">フラグレジスタとは何か</a></li>
+      <li><a href="#b2">4 つのフラグ</a></li>
+      <li><a href="#b3">フラグを立てる命令：CMP と TEST</a></li>
+      <li><a href="#b4">条件分岐命令（Jcc / Bcc）</a></li>
+      <li><a href="#b5">if / else 文の翻訳パターン</a></li>
+      <li><a href="#b6">while / for ループの翻訳パターン</a></li>
+      <li><a href="#b7">符号あり比較と符号なし比較</a></li>
+      <li><a href="#b8">論理演算と短絡評価</a></li>
+      <li><a href="#b9">まとめ</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="b1">1. フラグレジスタとは何か</h2>
+
+  <p>
+    CPU には通常の汎用レジスタ（rax, r0 など）とは別に、<strong>フラグレジスタ（APSR / RFLAGS）</strong>という
+    特殊なレジスタがあります。
+    演算命令や比較命令を実行するたびに、その結果の性質を示すビットが自動的にセットされます。
+  </p>
+
+  <p>
+    条件分岐命令はこのフラグを読んで「分岐するかどうか」を決定します。
+    つまり <code>if (a &gt; b)</code> という C の条件は、アセンブラでは
+    「比較命令でフラグを立て → 条件分岐命令でフラグを見て分岐」という 2 ステップで実現されます。
+  </p>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    SpecialRegPanel（PC や SP が表示されるパネル）の下部に
+    <strong>Z / N / C / V</strong> のフラグ状態が表示されます。
+    CMP 命令を実行した後でフラグが変化することを確認してください。
+  </div>
+
+  <!-- 2 -->
+  <h2 id="b2">2. 4 つのフラグ</h2>
+
+  <div class="flags-box">
+    <div class="flag flag-z">
+      <div class="flag-name">Z</div>
+      <div class="flag-desc">Zero<br>計算結果が 0</div>
+    </div>
+    <div class="flag flag-n">
+      <div class="flag-name">N</div>
+      <div class="flag-desc">Negative<br>結果が負</div>
+    </div>
+    <div class="flag flag-c">
+      <div class="flag-name">C</div>
+      <div class="flag-desc">Carry<br>桁あふれ（符号なし）</div>
+    </div>
+    <div class="flag flag-v">
+      <div class="flag-name">V</div>
+      <div class="flag-desc">oVerflow<br>桁あふれ（符号あり）</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>フラグ</th><th>ARM 呼称</th><th>x86 呼称</th><th>セットされる条件</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Z</strong>（Zero）</td>
+        <td>Z</td><td>ZF</td>
+        <td>命令の計算結果がちょうど 0<br><small style="color:#666;">例: <code>CMP a, b</code> は内部で <code>a - b</code> を計算する。a と b が等しければ結果が 0 になり Z=1 がセットされる</small></td>
+      </tr>
+      <tr>
+        <td><strong>N</strong>（Negative）</td>
+        <td>N</td><td>SF（Sign）</td>
+        <td>演算結果の最上位ビットが 1（負の数）</td>
+      </tr>
+      <tr>
+        <td><strong>C</strong>（Carry）</td>
+        <td>C</td><td>CF</td>
+        <td>符号なし整数として桁あふれが発生</td>
+      </tr>
+      <tr>
+        <td><strong>V</strong>（oVerflow）</td>
+        <td>V</td><td>OF</td>
+        <td>符号あり整数として桁あふれが発生</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 3 -->
+  <h2 id="b3">3. フラグを立てる命令：CMP と TEST</h2>
+
+  <h3>CMP — 大小比較</h3>
+
+  <p>
+    <code>CMP a, b</code> は <code>a - b</code> を計算し、その結果によってフラグをセットします。
+    計算結果自体はどこにも保存されません（比較のためだけに使う減算命令です）。
+  </p>
+
+  <pre><code><span class="comment">; CMP 3, 3  (a == b の場合)</span>
+<span class="comment">; 3 - 3 = 0 → Z=1, N=0, C=0, V=0</span>
+
+<span class="comment">; CMP 5, 3  (a &gt; b の場合)</span>
+<span class="comment">; 5 - 3 = 2 → Z=0, N=0, C=0, V=0</span>
+
+<span class="comment">; CMP 3, 5  (a &lt; b の場合)</span>
+<span class="comment">; 3 - 5 = -2 → Z=0, N=1, C=1, V=0</span></code></pre>
+
+  <h3>TEST — ビットマスク確認</h3>
+
+  <p>
+    <code>TEST a, b</code> は <code>a AND b</code> を計算してフラグをセットします（結果は保存しない）。
+    主に「あるビットが立っているか」を調べるために使われます。
+  </p>
+
+  <pre><code><span class="comment">; if (x != 0) の判定</span>
+test eax, eax     <span class="comment">; eax AND eax → eax が 0 なら Z=1</span>
+jnz  .nonzero     <span class="comment">; Z=0 なら分岐（eax ≠ 0）</span>
+
+<span class="comment">; if (x &amp; 1) の判定（奇数チェック）</span>
+test eax, 1       <span class="comment">; eax AND 1 → ビット0 が 0 なら Z=1</span>
+jz   .even        <span class="comment">; Z=1 なら偶数</span></code></pre>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    CMP 命令のステップを実行した後、ExplainPanel（命令詳細）に
+    <code>flags: Z=0, N=0, C=0, V=0</code> のようなフラグ変化が表示されます。
+    次の条件分岐命令がそのフラグを参照して分岐するかどうかを決めていることを確認してください。
+  </div>
+
+  <!-- 4 -->
+  <h2 id="b4">4. 条件分岐命令（Jcc / Bcc）</h2>
+
+  <p>
+    CMP でフラグが立ったあと、条件分岐命令がそのフラグを読んで「指定のラベルへジャンプするか否か」を判断します。
+    条件が成立しない場合は次の命令に進みます（fall-through）。
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>C の条件</th><th>x86 命令</th><th>ARM 命令</th><th>チェックするフラグ</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>==</code>（等しい）</td><td><code>JE / JZ</code></td><td><code>BEQ</code></td><td>Z=1</td></tr>
+      <tr><td><code>!=</code>（等しくない）</td><td><code>JNE / JNZ</code></td><td><code>BNE</code></td><td>Z=0</td></tr>
+      <tr><td><code>&lt;</code>（符号あり）</td><td><code>JL / JNGE</code></td><td><code>BLT</code></td><td>N≠V</td></tr>
+      <tr><td><code>&lt;=</code>（符号あり）</td><td><code>JLE / JNG</code></td><td><code>BLE</code></td><td>Z=1 または N≠V</td></tr>
+      <tr><td><code>&gt;</code>（符号あり）</td><td><code>JG / JNLE</code></td><td><code>BGT</code></td><td>Z=0 かつ N=V</td></tr>
+      <tr><td><code>&gt;=</code>（符号あり）</td><td><code>JGE / JNL</code></td><td><code>BGE</code></td><td>N=V</td></tr>
+      <tr><td><code>&lt;</code>（符号なし）</td><td><code>JB / JNAE</code></td><td><code>BCC / BLO</code></td><td>C=0</td></tr>
+      <tr><td><code>&gt;</code>（符号なし）</td><td><code>JA / JNBE</code></td><td><code>BHI</code></td><td>C=1 かつ Z=0</td></tr>
+      <tr><td>無条件分岐</td><td><code>JMP</code></td><td><code>B</code></td><td>（常に成立）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>命令名の読み方</strong><br>
+    x86 の <code>J</code> は Jump、<code>E</code>=Equal、<code>N</code>=Not、<code>L</code>=Less、<code>G</code>=Greater、
+    <code>B</code>=Below（符号なし）、<code>A</code>=Above（符号なし）です。
+    ARM の <code>B</code> は Branch、<code>EQ</code>=Equal、<code>NE</code>=Not Equal などのサフィックスが付きます。
+  </div>
+
+  <!-- 5 -->
+  <h2 id="b5">5. if / else 文の翻訳パターン</h2>
+
+  <p>GCC がどのように <code>if/else</code> を翻訳するかを見てみましょう。</p>
+
+  <pre><code><span class="comment">// C言語</span>
+if (a &gt; b) {
+    result = a;
+} else {
+    result = b;
+}</code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — if/else の翻訳</h4>
+      <pre><code>    ldr  r0, [fp, #-8]    <span class="comment">; r0 = a</span>
+    ldr  r1, [fp, #-12]   <span class="comment">; r1 = b</span>
+    cmp  r0, r1            <span class="comment">; a - b でフラグをセット</span>
+    ble  .Lelse            <span class="comment">; a &lt;= b なら else へ</span>
+
+<span class="comment">; if の本体（a &gt; b）</span>
+    ldr  r3, [fp, #-8]    <span class="comment">; result = a</span>
+    str  r3, [fp, #-16]
+    b    .Lend             <span class="comment">; else をスキップ</span>
+
+<span class="comment">.Lelse:</span>
+    ldr  r3, [fp, #-12]   <span class="comment">; result = b</span>
+    str  r3, [fp, #-16]
+
+<span class="comment">.Lend:</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — if/else の翻訳</h4>
+      <pre><code>    mov  eax, DWORD PTR [rbp-4]  <span class="comment">; eax = a</span>
+    cmp  eax, DWORD PTR [rbp-8]  <span class="comment">; a - b でフラグをセット</span>
+    jle  .Lelse                   <span class="comment">; a &lt;= b なら else へ</span>
+
+<span class="comment">; if の本体（a &gt; b）</span>
+    mov  eax, DWORD PTR [rbp-4]
+    mov  DWORD PTR [rbp-12], eax  <span class="comment">; result = a</span>
+    jmp  .Lend                    <span class="comment">; else をスキップ</span>
+
+<span class="comment">.Lelse:</span>
+    mov  eax, DWORD PTR [rbp-8]
+    mov  DWORD PTR [rbp-12], eax  <span class="comment">; result = b</span>
+
+<span class="comment">.Lend:</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    GCC は <strong>C の条件を反転させた分岐命令</strong>を生成するのが基本パターンです。
+    <code>if (a &gt; b)</code> なら「<code>a &gt; b</code> でないとき（<code>a &lt;= b</code> のとき）else へ飛ぶ」という
+    逆向きの条件でジャンプします。条件が成立するとき（true の場合）は次の命令へ続くだけです。
+  </p>
+
+  <div class="key">
+    <strong>条件の「反転」に慣れる</strong><br>
+    C の <code>if (cond)</code> → アセンブラでは <code>j[NOT cond] else_label</code> が出てきます。
+    「else に飛ぶ条件」が書かれているので、最初は逆に読めてしまうことがあります。
+    「この分岐は else へのエスケープ」と考えると読みやすくなります。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    条件分岐命令のステップで、アセンブラパネルのハイライトが次の行に進むか、
+    ラベル先にジャンプするかを確認してください。
+    ExplainPanel には「Z=1 のため分岐しました」のような説明が表示されます。
+  </div>
+
+  <!-- 6 -->
+  <h2 id="b6">6. while / for ループの翻訳パターン</h2>
+
+  <p>ループは「条件チェック → 本体 → ループ先頭へ戻るジャンプ」の繰り返しに翻訳されます。</p>
+
+  <pre><code><span class="comment">// C言語</span>
+int i = 0;
+int sum = 0;
+while (i &lt; 5) {
+    sum += i;
+    i++;
+}</code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — while ループ</h4>
+      <pre><code>    mov  r3, #0
+    str  r3, [fp, #-8]    <span class="comment">; i = 0</span>
+    mov  r3, #0
+    str  r3, [fp, #-12]   <span class="comment">; sum = 0</span>
+
+<span class="hl">.Lloop:</span>
+    ldr  r3, [fp, #-8]    <span class="comment">; r3 = i</span>
+    cmp  r3, #4            <span class="comment">; i - 4 でフラグ</span>
+    <span class="hl2">bgt  .Lend</span>             <span class="comment">; i &gt; 4 なら終了</span>
+
+    ldr  r2, [fp, #-12]
+    ldr  r3, [fp, #-8]
+    add  r3, r2, r3        <span class="comment">; sum += i</span>
+    str  r3, [fp, #-12]
+
+    ldr  r3, [fp, #-8]
+    add  r3, r3, #1        <span class="comment">; i++</span>
+    str  r3, [fp, #-8]
+
+    <span class="hl3">b    .Lloop</span>             <span class="comment">; 先頭に戻る</span>
+<span class="hl">.Lend:</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — while ループ</h4>
+      <pre><code>    mov  DWORD PTR [rbp-4], 0   <span class="comment">; i = 0</span>
+    mov  DWORD PTR [rbp-8], 0   <span class="comment">; sum = 0</span>
+
+<span class="hl">.Lloop:</span>
+    cmp  DWORD PTR [rbp-4], 4   <span class="comment">; i - 4 でフラグ</span>
+    <span class="hl2">jg   .Lend</span>                  <span class="comment">; i &gt; 4 なら終了</span>
+
+    mov  eax, DWORD PTR [rbp-4]
+    add  DWORD PTR [rbp-8], eax <span class="comment">; sum += i</span>
+
+    add  DWORD PTR [rbp-4], 1   <span class="comment">; i++</span>
+
+    <span class="hl3">jmp  .Lloop</span>                 <span class="comment">; 先頭に戻る</span>
+<span class="hl">.Lend:</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    GCC の <code>-O0</code> 出力では「ループ先頭でチェックしてから本体を実行」するパターンが多いです。
+    最適化（<code>-O1</code> 以上）では「先に本体を実行してからチェック」する <em>do-while</em> 形式に
+    変換されることもあります（余分なジャンプを削減できるため）。
+  </p>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    ステップを進めながら、ループ本体の命令が何度も繰り返されることを確認してください。
+    アセンブラパネルの同じ行が複数回ハイライトされます。
+    条件分岐命令で「今回は分岐しなかった」「今回は分岐した（ループを抜けた）」を
+    フラグ値と合わせて観察してみてください。
+  </div>
+
+  <!-- 7 -->
+  <h2 id="b7">7. 符号あり比較と符号なし比較</h2>
+
+  <p>
+    C の比較は変数の型によって「符号あり比較」か「符号なし比較」かが決まります。
+    アセンブラでは異なる条件分岐命令を使い分けます。
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>型</th><th>比較の種類</th><th>x86 分岐命令</th><th>ARM 分岐命令</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>int</code>（符号あり）</td><td>符号あり比較</td><td><code>JL / JG / JLE / JGE</code></td><td><code>BLT / BGT / BLE / BGE</code></td></tr>
+      <tr><td><code>unsigned int</code>（符号なし）</td><td>符号なし比較</td><td><code>JB / JA / JBE / JAE</code></td><td><code>BCC / BHI / BLS / BCS</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    これは CPU がフラグを使う方法の違いです。
+    符号あり比較では N フラグと V フラグの関係を使い、
+    符号なし比較では C フラグと Z フラグを使います。
+  </p>
+
+  <div class="key">
+    <strong>なぜ使い分けが必要か</strong><br>
+    <code>-1</code>（符号あり）は 2 の補数表現で <code>0xFFFFFFFF</code> です。
+    符号なしとして解釈すると約 42 億（= 4294967295）になります。
+    <code>-1 &lt; 1</code> は符号ありでは true ですが、符号なしでは false になります。
+    コンパイラは C の変数型から自動的に適切な比較命令を選択します。
+  </div>
+
+  <!-- 8 -->
+  <h2 id="b8">8. 論理演算と短絡評価</h2>
+
+  <p>
+    <code>&&</code> や <code>||</code> を使った複合条件は、
+    アセンブラでは複数の CMP + 条件分岐の組み合わせに展開されます。
+  </p>
+
+  <pre><code><span class="comment">// C言語: if (a &gt; 0 &amp;&amp; b &gt; 0)</span></code></pre>
+
+  <pre><code>    cmp  eax, 0
+    jle  .Lfalse    <span class="comment">; a &lt;= 0 なら即終了（短絡評価: a が false なら b を見ない）</span>
+    cmp  ebx, 0
+    jle  .Lfalse    <span class="comment">; b &lt;= 0 なら終了</span>
+
+<span class="comment">; 両方 true の処理</span>
+    ...
+<span class="comment">.Lfalse:</span>
+    ...</code></pre>
+
+  <p>
+    C の論理 AND（<code>&&</code>）は左から順に評価し、<strong>最初に false になった時点で残りを評価しない</strong>
+    「短絡評価（short-circuit evaluation）」が保証されています。
+    アセンブラでは、左側の条件が偽のとき即座にラベルへジャンプすることで実現されています。
+  </p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — OR 条件（||）</h4>
+      <pre><code>    cmp  r0, #0
+    bgt  .Ltrue    <span class="comment">; a &gt; 0 なら即 true</span>
+    cmp  r1, #0
+    ble  .Lfalse   <span class="comment">; b &lt;= 0 なら false</span>
+<span class="comment">.Ltrue:</span>
+    <span class="comment">; 少なくとも一方が true</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — OR 条件（||）</h4>
+      <pre><code>    cmp  eax, 0
+    jg   .Ltrue    <span class="comment">; a &gt; 0 なら即 true</span>
+    cmp  ebx, 0
+    jle  .Lfalse   <span class="comment">; b &lt;= 0 なら false</span>
+<span class="comment">.Ltrue:</span>
+    <span class="comment">; 少なくとも一方が true</span></code></pre>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <h2 id="b9">9. まとめ</h2>
+
+  <table>
+    <thead>
+      <tr><th>概念</th><th>内容</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>フラグレジスタ</td><td>Z / N / C / V の 4 ビット。演算・比較命令が自動更新</td></tr>
+      <tr><td>CMP a, b</td><td>a - b を計算してフラグをセット（結果は保存しない）</td></tr>
+      <tr><td>TEST a, b</td><td>a AND b を計算してフラグをセット（ビット検査に使う）</td></tr>
+      <tr><td>条件分岐命令</td><td>フラグを読んで分岐するかを決定（Jcc / Bcc）</td></tr>
+      <tr><td>if/else の変換</td><td>条件を反転した分岐で else ブロックへエスケープ</td></tr>
+      <tr><td>ループの変換</td><td>先頭でチェック → 本体 → 先頭へ無条件ジャンプ</td></tr>
+      <tr><td>符号あり vs 符号なし</td><td>変数型によって異なる分岐命令（JL/JG vs JB/JA）を使用</td></tr>
+      <tr><td>短絡評価</td><td>&&/|| は複数の CMP + 分岐の連鎖で実現</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    条件分岐の仕組みを理解すると、アセンブラで書かれたコードの制御フローを
+    上から順に追うだけで「どの条件でどこへ飛んでいるか」が読み解けるようになります。
+    AsmWalker でサンプルコードをステップ実行しながら、
+    C の条件式とアセンブラの分岐命令を対比させてみてください。
+  </p>
+
+  <footer>
+    AsmWalker ガイド
+  </footer>
+
+</body>
+</html>

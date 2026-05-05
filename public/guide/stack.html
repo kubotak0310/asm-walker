@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スタックの仕組み — AsmWalker ガイド</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+    .hl  { color: #c0392b; font-weight: bold; }
+    .hl2 { color: #2471a3; font-weight: bold; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    /* Stack diagram */
+    .stack-diagram {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.85rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1rem 0;
+      max-width: 380px;
+    }
+    .stack-row {
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .stack-row:last-child { border-bottom: none; }
+    .stack-addr {
+      background: #f0f0f0;
+      color: #555;
+      padding: 0.35rem 0.6rem;
+      min-width: 90px;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+    }
+    .stack-val {
+      flex: 1;
+      padding: 0.35rem 0.8rem;
+      display: flex;
+      align-items: center;
+    }
+    .stack-sp  { background: #fff3e0; font-weight: bold; }
+    .stack-used { background: #e8f4fd; }
+    .stack-free { background: #fff; color: #aaa; }
+    .stack-label { color: #888; font-size: 0.8rem; margin-left: 0.5rem; }
+
+    /* Nested frame diagram */
+    .frame-stack-diagram {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.83rem;
+      margin: 1.2rem 0;
+      max-width: 520px;
+    }
+    .addr-hint {
+      color: #888;
+      font-size: 0.8rem;
+      padding: 0.2rem 0;
+    }
+    .frame-block {
+      border: 2px solid #ccc;
+      border-radius: 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .frame-block:first-of-type { border-radius: 6px 6px 0 0; }
+    .frame-block:last-of-type  { border-radius: 0 0 6px 6px; border-top: none; }
+    .frame-block + .frame-block { border-top: none; }
+    .frame-header {
+      padding: 0.3rem 0.8rem;
+      font-weight: bold;
+      font-size: 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .frame-cell {
+      border-top: 1px dashed #ddd;
+      padding: 0.28rem 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .frame-cell-offset { color: #888; font-size: 0.76rem; font-style: italic; }
+    .frame-access { color: #c0392b; font-size: 0.76rem; }
+    .fp-marker  { color: #0066cc; font-weight: bold; font-size: 0.78rem; padding-left: 0.4rem; }
+    .sp-row {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.3rem 0.8rem;
+      color: #e65100; font-weight: bold; font-size: 0.82rem;
+    }
+
+    .frame-main { border-color: #7c4dff; }
+    .frame-main .frame-header { background: #7c4dff; color: #fff; }
+    .frame-main .frame-cell   { background: #faf8ff; }
+
+    .frame-a { border-color: #2e7d32; }
+    .frame-a .frame-header { background: #2e7d32; color: #fff; }
+    .frame-a .frame-cell   { background: #f4fbf4; }
+
+    .frame-b { border-color: #e65100; }
+    .frame-b .frame-header { background: #e65100; color: #fff; }
+    .frame-b .frame-cell   { background: #fff8f4; }
+
+    .subtitle { color: #666; font-size: 0.95rem; margin-top: 0.25rem; margin-bottom: 2rem; }
+    footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    nav.toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0 2rem; }
+    nav.toc h2 { font-size: 1rem; margin: 0 0 0.5rem; border: none; padding: 0; color: #555; }
+    nav.toc ol { margin: 0; padding-left: 1.3rem; }
+    nav.toc li { margin: 0.2rem 0; font-size: 0.93rem; }
+    nav.toc a { color: #0066cc; text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <h1>スタックの仕組み</h1>
+  <p class="subtitle">AsmWalker ガイド — メモリとスタックポインタの動きを理解する</p>
+
+  <nav class="toc">
+    <h2>目次</h2>
+    <ol>
+      <li><a href="#s1">スタックとは何か</a></li>
+      <li><a href="#s2">スタックはメモリのどこにあるか</a></li>
+      <li><a href="#s3">PUSH と POP の正体</a></li>
+      <li><a href="#s4">スタックポインタ（SP / RSP）</a></li>
+      <li><a href="#s5">関数がスタックを使う理由</a></li>
+      <li><a href="#s6">ローカル変数の確保と解放</a></li>
+      <li><a href="#s7">スタックオーバーフロー</a></li>
+      <li><a href="#s8">まとめ</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="s1">1. スタックとは何か</h2>
+
+  <p>
+    スタック（stack）は「後入れ先出し（LIFO: Last In, First Out）」のデータ構造です。
+    本を積み上げる場面を想像してください。一番上に置いた本を最初に取り出せます。
+  </p>
+
+  <pre><code>積む（PUSH）: A → B → C と順に積む
+取り出す（POP）: C → B → A の順に取り出せる</code></pre>
+
+  <p>
+    プログラムの実行中は、この LIFO 構造を使ってローカル変数・戻り先アドレス・保存レジスタなどを
+    一時的に保持します。
+  </p>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    右側の「スタック」パネルがスタックメモリをリアルタイムで表示します。
+    ステップを進めながら値が積まれていく様子と、SP が上下する様子を確認してください。
+  </div>
+
+  <!-- 2 -->
+  <h2 id="s2">2. スタックはメモリのどこにあるか</h2>
+
+  <p>
+    プログラムが使うメモリは大まかに次のような領域に分かれています。
+  </p>
+
+  <pre><code>高アドレス ↑
+┌─────────────────────────┐
+│  スタック（stack）        │  ← 関数のローカル変数・戻りアドレスなど
+│   ↓（使うほど下に伸びる）  │
+│                          │
+│  ヒープ（heap）           │  ← malloc など動的確保
+│   ↑（使うほど上に伸びる）  │
+│                          │
+│  データ領域（.data）      │  ← グローバル変数・static 変数
+│  コード領域（.text）      │  ← 命令列
+└─────────────────────────┘
+低アドレス ↓</code></pre>
+
+  <p>
+    スタックは<strong>高アドレスから低アドレス方向に伸びる</strong>という点が重要です。
+    値を積むたびにアドレスが小さくなっていきます。
+  </p>
+
+  <div class="key">
+    <strong>注意</strong><br>
+    「スタックが下に伸びる」という言い方は、メモリアドレスが<em>小さくなる</em>方向に伸びることを指します。
+    画面の上下（スタックの図では高アドレスを上に描くことが多い）と混同しないように注意してください。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    スタックパネルは<strong>高アドレスが上</strong>に表示されます。
+    PUSH 命令を実行するたびに新しいセルが下に追加されていくことを確認してください。
+    これがアドレスの減少方向に積まれている証拠です。
+  </div>
+
+  <!-- 3 -->
+  <h2 id="s3">3. PUSH と POP の正体</h2>
+
+  <p>
+    PUSH / POP は見た目はシンプルですが、内部では <strong>SP の移動 + メモリの読み書き</strong> の
+    2ステップが起きています。
+  </p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM Cortex-M</h4>
+      <pre><code><span class="comment">; PUSH {r4} の展開:</span>
+sub sp, sp, #4    <span class="comment">; SP -= 4</span>
+str r4, [sp]      <span class="comment">; [SP] ← r4</span>
+
+<span class="comment">; POP {r4} の展開:</span>
+ldr r4, [sp]      <span class="comment">; r4 ← [SP]</span>
+add sp, sp, #4    <span class="comment">; SP += 4</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code><span class="comment">; push rbp の展開:</span>
+sub rsp, 8        <span class="comment">; RSP -= 8</span>
+mov [rsp], rbp    <span class="comment">; [RSP] ← rbp</span>
+
+<span class="comment">; pop rbp の展開:</span>
+mov rbp, [rsp]    <span class="comment">; rbp ← [RSP]</span>
+add rsp, 8        <span class="comment">; RSP += 8</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    ARM では 1 レジスタ = 4 バイト（32bit）、x86-64 では 1 レジスタ = 8 バイト（64bit）なので、
+    SP の増減量が異なります。
+  </p>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    ExplainPanel（命令詳細パネル）に PUSH 命令の説明が表示されます。
+    <code>rsp ← rsp - 8; [rsp] ← rbp</code> のように、SP 移動とメモリ書き込みの
+    2ステップがひとつの命令として実行される様子を確認できます。
+  </div>
+
+  <!-- 4 -->
+  <h2 id="s4">4. スタックポインタ（SP / RSP）</h2>
+
+  <p>
+    スタックポインタは「現在スタックのどこまで使っているか」を示すレジスタです。
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>アーキテクチャ</th><th>レジスタ名</th><th>ビット幅</th><th>役割</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ARM Cortex-M</td><td><code>SP</code>（= r13）</td><td>32bit</td><td>スタックの現在位置</td></tr>
+      <tr><td>x86-64</td><td><code>RSP</code></td><td>64bit</td><td>スタックの現在位置</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    SP は常に「<strong>最後に積んだ値のアドレス</strong>」を指しています（Full Descending スタック）。
+    値を積む前に SP を下げ、その位置に書き込むのがお作法です。
+  </p>
+
+  <h3>スタックの状態変化を追う</h3>
+
+  <p>以下は ARM での PUSH/POP のメモリ状態の例です。</p>
+
+  <div class="stack-diagram">
+    <div class="stack-row">
+      <div class="stack-addr">0x20008000</div>
+      <div class="stack-val stack-free">（未使用）</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-addr">0x20007ffc</div>
+      <div class="stack-val stack-used">r4 = 0x12345678</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-addr">0x20007ff8</div>
+      <div class="stack-val stack-sp">← SP（push r3 後）</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-addr">0x20007ff4</div>
+      <div class="stack-val stack-free">（未使用）</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    SpecialRegPanel の「SP」欄でスタックポインタの値を確認できます。
+    PUSH を実行するたびに値が小さくなり（アドレスが下がり）、
+    POP を実行すると値が大きくなる（アドレスが上がる）ことを確認してください。
+  </div>
+
+  <!-- 5 -->
+  <h2 id="s5">5. 関数がスタックを使う理由</h2>
+
+  <p>関数がスタックを必要とする主な場面は 3 つです。</p>
+
+  <ol>
+    <li><strong>ローカル変数の保存</strong> — 関数内で宣言した変数を一時的に置く場所</li>
+    <li><strong>戻り先アドレスの保存</strong> — 関数から戻るときの行き先（x86: <code>call</code> が自動で積む）</li>
+    <li><strong>レジスタの退避（callee-save）</strong> — 呼び出し先が使ったレジスタを壊さないよう、元の値をスタックに退避する</li>
+  </ol>
+
+  <p>
+    これらを合わせたメモリ領域ひとまとまりを「スタックフレーム（stack frame）」と呼びます。
+    関数が呼び出されるたびに新しいフレームが積まれ、関数から戻るときに破棄されます。
+  </p>
+
+  <h3>main → FuncA → FuncB と呼ばれたときのスタック</h3>
+
+  <p>
+    3段階のネスト呼び出しが行われると、スタックには下の図のように 3 つのフレームが積み上がります。
+    一番最初に呼ばれた main のフレームが高アドレス側にあり、
+    現在実行中の FuncB のフレームが最も低アドレス側にあります。
+  </p>
+
+  <div class="frame-stack-diagram">
+    <div class="addr-hint">高アドレス（初期 SP）▲</div>
+
+    <div class="frame-block frame-main">
+      <div class="frame-header">
+        <span>main のスタックフレーム</span>
+      </div>
+      <div class="frame-cell">
+        <span>保存 LR（戻り先アドレス）</span>
+        <span class="frame-cell-offset"></span>
+      </div>
+      <div class="frame-cell">
+        <span>int x = 10</span>
+        <span class="frame-cell-offset">
+          [fp_main - 4] &nbsp;<span class="frame-access">← 通常のメモリ読み書き</span>
+        </span>
+      </div>
+      <div class="frame-cell">
+        <span>int y = 20</span>
+        <span class="frame-cell-offset">[fp_main - 8]</span>
+      </div>
+      <div class="frame-cell" style="border-top: 2px solid #7c4dff;">
+        <span style="color:#555;">↕ FP_main（フレームポインタ）</span>
+        <span class="fp-marker">FP_main →</span>
+      </div>
+    </div>
+
+    <div class="frame-block frame-a">
+      <div class="frame-header">
+        <span>FuncA のスタックフレーム</span>
+      </div>
+      <div class="frame-cell">
+        <span>保存 FP_main</span>
+        <span class="frame-cell-offset">（呼び出し元のフレームポインタを退避）</span>
+      </div>
+      <div class="frame-cell">
+        <span>保存 LR（main への戻り先）</span>
+        <span class="frame-cell-offset"></span>
+      </div>
+      <div class="frame-cell">
+        <span>int a = 3</span>
+        <span class="frame-cell-offset">
+          [fp_A - 4] &nbsp;<span class="frame-access">← 通常のメモリ読み書き</span>
+        </span>
+      </div>
+      <div class="frame-cell">
+        <span>int b = 5</span>
+        <span class="frame-cell-offset">[fp_A - 8]</span>
+      </div>
+      <div class="frame-cell" style="border-top: 2px solid #2e7d32;">
+        <span style="color:#555;">↕ FP_A（フレームポインタ）</span>
+        <span class="fp-marker">FP_A →</span>
+      </div>
+    </div>
+
+    <div class="frame-block frame-b">
+      <div class="frame-header">
+        <span>FuncB のスタックフレーム（現在実行中）</span>
+      </div>
+      <div class="frame-cell">
+        <span>保存 FP_A</span>
+        <span class="frame-cell-offset">（呼び出し元のフレームポインタを退避）</span>
+      </div>
+      <div class="frame-cell">
+        <span>保存 LR（FuncA への戻り先）</span>
+        <span class="frame-cell-offset"></span>
+      </div>
+      <div class="frame-cell">
+        <span>int p = 7</span>
+        <span class="frame-cell-offset">
+          [fp_B - 4] &nbsp;<span class="frame-access">← 通常のメモリ読み書き</span>
+        </span>
+      </div>
+      <div class="frame-cell" style="border-top: 2px solid #e65100;">
+        <span style="color:#555;">↕ FP_B（フレームポインタ）</span>
+        <span class="fp-marker">FP_B →</span>
+      </div>
+    </div>
+
+    <div class="sp-row">▼ SP（スタックポインタ。現在 FuncB のフレーム末尾を指している）</div>
+    <div class="addr-hint">低アドレス ▼</div>
+  </div>
+
+  <div class="key">
+    <strong>「スタック = push/pop しかできない」は誤解です</strong><br>
+    スタックという名前からデータ構造の LIFO を連想し、
+    「スタックメモリへのアクセスは push / pop しか許されない」と思い込む初学者は少なくありません。<br><br>
+    実際には 2 つのルールが別々に存在します：
+    <ul style="margin: 0.5rem 0 0;">
+      <li><strong>フレーム間</strong>の積み方・壊し方は LIFO（呼び出した順の逆に解放）</li>
+      <li><strong>フレーム内</strong>のデータへのアクセスは <em>普通のメモリ読み書き</em>（ランダムアクセス可）</li>
+    </ul>
+    <br>
+    ローカル変数は <code>[fp - 4]</code>、<code>[fp - 8]</code> のように
+    フレームポインタからのオフセット指定で自由に読み書きできます。
+    push / pop を使うのは「フレームの確保・解放」と「レジスタの退避・復元」の場面だけです。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    スタックパネルの左端のカラーバーがフレームの帰属を示します。
+    main のフレーム（紫）の上に子関数のフレーム（緑）が積まれる様子を確認してください。
+    FrameViz（フレーム色分け図）でも視覚的に確認できます。
+  </div>
+
+  <!-- 6 -->
+  <h2 id="s6">6. ローカル変数の確保と解放</h2>
+
+  <p>
+    ローカル変数用の領域は SP をずらすだけで確保できます。
+    malloc のようなシステムコールは不要で、非常に高速です。
+  </p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — ローカル変数の確保</h4>
+      <pre><code>push {fp, lr}       <span class="comment">; FP, LR を保存</span>
+add  fp, sp, #4     <span class="comment">; フレームポインタ設定</span>
+sub  sp, sp, #8     <span class="comment">; ローカル変数 8 バイト確保</span>
+
+<span class="comment">; ... 関数の処理 ...</span>
+
+sub  sp, fp, #4     <span class="comment">; SP を元に戻す（解放）</span>
+pop  {fp, pc}       <span class="comment">; FP 復元、PC = 戻り先</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — ローカル変数の確保</h4>
+      <pre><code>push rbp             <span class="comment">; RBP を保存</span>
+mov  rbp, rsp        <span class="comment">; フレームポインタ設定</span>
+sub  rsp, 16         <span class="comment">; ローカル変数 16 バイト確保</span>
+
+<span class="comment">; ... 関数の処理 ...</span>
+
+leave                <span class="comment">; mov rsp, rbp; pop rbp</span>
+ret                  <span class="comment">; 戻り先へジャンプ</span></code></pre>
+    </div>
+  </div>
+
+  <h3>「解放」とはスタックポインタを動かすだけ</h3>
+
+  <p>
+    スタックの解放は<strong>SP を元の位置に戻すだけ</strong>です。メモリ上の値はクリアされません。
+  </p>
+
+  <pre><code>確保: sub rsp, 16  <span class="comment">; RSP を 16 下げる → その領域が「使用中」</span>
+解放: add rsp, 16  <span class="comment">; RSP を 16 上げる → その領域が「空き」扱いになる</span>
+                   <span class="comment">; ※ メモリ上の値はそのまま残っている</span></code></pre>
+
+  <div class="key">
+    <strong>ダングリングポインタに注意</strong><br>
+    関数内のローカル変数のアドレスを <code>return</code> で返してはいけません。
+    関数が終わると SP が戻り、その領域は「空き」になります。
+    次の関数呼び出しで同じアドレスに別のデータが書き込まれ、
+    返したアドレスの中身は予期しない値に化けます（未定義動作）。
+    <pre style="margin-top:0.5rem;"><code>int* bad() {
+    int x = 42;
+    return &amp;x;  <span class="comment">// 危険: 関数終了後はゴミ値になる</span>
+}</code></pre>
+  </div>
+
+  <h3>ローカル変数へのアクセス方法</h3>
+
+  <p>
+    確保した領域にある変数は、フレームポインタ（FP / RBP）からのオフセットで参照するのが基本です。
+  </p>
+
+  <pre><code><span class="comment">; int x = 3; をスタックに保存する例（x86-64）</span>
+mov  DWORD PTR [rbp-4], 3   <span class="comment">; x は rbp - 4 に配置</span>
+
+<span class="comment">; int y = 5; をスタックに保存する例</span>
+mov  DWORD PTR [rbp-8], 5   <span class="comment">; y は rbp - 8 に配置</span></code></pre>
+
+  <div class="key">
+    <strong>ARM <code>-mthumb</code> / 最適化時の注意</strong><br>
+    ARM GCC に <code>-mthumb</code> や <code>-O1</code> 以上を指定すると、フレームポインタ（r7 / fp）を
+    省略してスタックポインタ（SP）からの相対アドレスでローカル変数にアクセスする場合があります。
+    そのため GCC 出力の <code>[sp, #N]</code> のような書き方を見かけることがあります。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認</strong><br>
+    スタックパネルのセルにマウスを乗せると値とアドレスが表示されます。
+    <code>mov DWORD PTR [rbp-4], 3</code> を実行した後に
+    <code>rbp-4</code> のアドレスのセルに <code>3</code> が書き込まれていることを確認してください。
+  </div>
+
+  <!-- 7 -->
+  <h2 id="s7">7. スタックオーバーフロー</h2>
+
+  <p>
+    スタック領域には上限があります。深い再帰や巨大なローカル変数でスタックが限界を超えると、
+    <strong>スタックオーバーフロー（stack overflow）</strong>が発生してプログラムがクラッシュします。
+  </p>
+
+  <pre><code><span class="comment">// 再帰が深すぎる例（すぐにスタックオーバーフロー）</span>
+void infinite(void) {
+    int buf[1024];    <span class="comment">// 毎回 4KB をスタックに確保</span>
+    infinite();       <span class="comment">// 戻らずに再帰 → SP が際限なく下がる</span>
+}</code></pre>
+
+  <p>
+    ARM Cortex-M などの組み込み環境では数 KB しかスタックがないことも多く、
+    深い再帰や大きな配列のローカル変数には注意が必要です。
+  </p>
+
+  <div class="key">
+    <strong>AsmWalker での注意</strong><br>
+    AsmWalker は最大 200〜500 ステップでトレースを打ち切ります。
+    無限再帰は「最大ステップ数を超えました」エラーになります。
+    本物のスタックオーバーフローとは現象が異なりますが、無限ループの検出として機能します。
+  </div>
+
+  <!-- 8 -->
+  <h2 id="s8">8. まとめ</h2>
+
+  <table>
+    <thead>
+      <tr><th>概念</th><th>内容</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>スタックの方向</td><td>高アドレス → 低アドレスへ伸びる（SP が下がる方向）</td></tr>
+      <tr><td>PUSH</td><td>SP -= サイズ → [SP] に値を書き込む</td></tr>
+      <tr><td>POP</td><td>[SP] から値を読み出す → SP += サイズ</td></tr>
+      <tr><td>スタックフレーム</td><td>1関数が使うスタックの範囲。関数開始で確保、終了で解放</td></tr>
+      <tr><td>「解放」の意味</td><td>SP を元の位置に戻すだけ。メモリはクリアされない</td></tr>
+      <tr><td>ローカル変数</td><td>FP（またはSP）± オフセットで読み書き</td></tr>
+      <tr><td>スタックオーバーフロー</td><td>SP が領域限界を超えてクラッシュ</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    AsmWalker ガイド
+  </footer>
+
+</body>
+</html>

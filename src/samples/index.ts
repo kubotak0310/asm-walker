@@ -12,67 +12,67 @@ export const SAMPLES: SampleDef[] = [
     id: 'funcCall',
     name: '関数呼び出し',
     cCode: `int add(int a, int b) {
-    return a + b;
+  return a + b;
 }
 
 int main() {
-    return add(3, 5);
+  return add(3, 5);
 }`,
   },
   {
     id: 'arithmetic',
     name: '四則演算',
     cCode: `int main() {
-    int a = 10, b = 3;
-    int sum  = a + b;
-    int diff = a - b;
-    int prod = a * b;
-    int quot = a / b;
-    return sum + diff;
+  int a = 10, b = 3;
+  int sum  = a + b;
+  int diff = a - b;
+  int prod = a * b;
+  int quot = a / b;
+  return sum + diff;
 }`,
   },
   {
     id: 'branch',
     name: '条件分岐',
     cCode: `int compare(int a, int b) {
-    if (a < b) return -1;
-    else if (a == b) return 0;
-    else return 1;
+  if (a < b) return -1;
+  else if (a == b) return 0;
+  else return 1;
 }
 
 int main() {
-    int r1 = compare(3, 3);
-    int r2 = compare(5, 3);
-    int r3 = compare(3, 5);
-    return r1 + r2 + r3;
+  int r1 = compare(3, 3);
+  int r2 = compare(5, 3);
+  int r3 = compare(3, 5);
+  return r1 + r2 + r3;
 }`,
   },
   {
     id: 'pointer',
     name: 'ポインタとアドレス',
     cCode: `int main() {
-    int x = 42;
-    int *ptr;
-    ptr = &x;
-    *ptr = 100;
-    int y = *ptr;
-    return y;
+  int x = 42;
+  int *ptr;
+  ptr = &x;
+  *ptr = 100;
+  int y = *ptr;
+  return y;
 }`,
   },
   {
     id: 'array',
     name: '配列を関数に渡す',
     cCode: `int sum_array(int *a, int n) {
-    int s = 0;
-    s += a[0];
-    s += a[1];
-    s += a[2];
-    return s;
+  int s = 0;
+  s += a[0];
+  s += a[1];
+  s += a[2];
+  return s;
 }
 
 int main() {
-    int arr[3] = {1, 2, 3};
-    return sum_array(arr, 3);
+  int arr[3] = {1, 2, 3};
+  return sum_array(arr, 3);
 }`,
   },
 ]

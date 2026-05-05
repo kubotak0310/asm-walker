@@ -119,7 +119,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { EditorView, basicSetup } from 'codemirror'
 import { cpp } from '@codemirror/lang-cpp'
-import { syntaxHighlighting, HighlightStyle } from '@codemirror/language'
+import { syntaxHighlighting, HighlightStyle, indentUnit } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
 import { useSimulator } from '@/composables/useSimulator'
 import { SAMPLES } from '@/samples'
@@ -187,6 +187,7 @@ onMounted(() => {
     extensions: [
       basicSetup,
       cpp(),
+      indentUnit.of('  '),
       EditorView.theme({
         '&': { backgroundColor: '#1f2937', color: '#e2e8f0' },
         '.cm-content': { fontFamily: 'monospace', fontSize: '15px', lineHeight: '1.6' },

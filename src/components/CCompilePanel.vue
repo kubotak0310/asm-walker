@@ -228,6 +228,9 @@ watch(() => arch.value, (newArch) => {
     compilerId.value = 'carm1121'
     extraFlags.value = COMPILER_DEFAULT_FLAGS['carm1121'] ?? ''
   }
+  // アーキ切り替え時はエディタを開いた状態に戻す（再編集ボタン不要）
+  hasResult.value = false
+  errors.value = []
 })
 
 async function compile() {

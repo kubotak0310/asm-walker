@@ -270,7 +270,15 @@ const callDisplay = computed<string | null>(() => {
  * @param newArch - 切り替え先のアーキテクチャ（'arm' または 'x86'）
  */
 function setArch(newArch: Arch) {
+  if (arch.value === newArch) return
+  // アーキ切り替え時はステップ列・エラーをリセットする。
+  // ARM ステップ列のまま x86 インタープリタが走ると誤動作するため。
   arch.value = newArch
+  preset.value = null
+  currentStep.value = 0
+  states.value = [newArch === 'x86' ? X86_INITIAL_STATE : INITIAL_STATE]
+  compileError.value = null
+  gccOutput.value = ''
 }
 
 /**

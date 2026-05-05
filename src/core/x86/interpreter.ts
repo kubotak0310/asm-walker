@@ -306,13 +306,11 @@ function handleStackX86(
     const val = resolveOperandValue(op0, state)
     const newSp = (state.sp - 8) >>> 0
     const src = op0.type === 'reg' ? fmtRV(op0.name, val) : fmtDec(val)
-    const isAddrVal = (val >>> 0) >= 0x400000 && (val >>> 0) <= 0x800000
     const effect = `rsp ← ${hexU32(newSp)}; [rsp] ← ${src}`
     const comment = `${src} をスタックに保存`
     return makeResult(ctx,
       { sp: newSp, stackSet: { [newSp]: val >>> 0 }, frames: updateTopFrame(newSp, state) },
       `${src} をスタックにプッシュ`, effect, comment, ctx.nextDefault,
-      { isPtr: isAddrVal },
     )
   }
 

@@ -40,18 +40,6 @@ int main() {
 }`,
   },
   {
-    id: 'arithmetic',
-    name: '四則演算',
-    cCode: `int main() {
-  int a = 10, b = 3;
-  int sum  = a + b;
-  int diff = a - b;
-  int prod = a * b;
-  int quot = a / b;
-  return sum + diff;
-}`,
-  },
-  {
     id: 'branch',
     name: '条件分岐',
     cCode: `int compare(int a, int b) {
@@ -78,18 +66,6 @@ int main() {
   int x = 5;
   double_it(&x);
   return x;
-}`,
-  },
-  {
-    id: 'pointer',
-    name: 'ポインタとアドレス',
-    cCode: `int main() {
-  int x = 42;
-  int *ptr;
-  ptr = &x;
-  *ptr = 100;
-  int y = *ptr;
-  return y;
 }`,
   },
   {

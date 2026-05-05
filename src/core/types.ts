@@ -11,9 +11,9 @@ export interface Flags {
 
 export interface StackMeta {
   label: string
-  // sw=ソフトウェア書き込み / hw=HW自動退避 / ptr=ポインタ値 / arr=配列要素
+  // sw=ソフトウェア書き込み / hw=HW自動退避 / arr=配列要素
   // StackPanel のセル色分けに使う
-  kind: 'sw' | 'hw' | 'ptr' | 'arr'
+  kind: 'sw' | 'hw' | 'arr'
 }
 
 export interface StackFrame {
@@ -63,7 +63,6 @@ export interface StepData {
   explain: string
   effect: string
   comment?: string  // concise inline annotation for CodePanel (separate from explain)
-  isPtr?: boolean
   isArr?: boolean
   update: StateUpdate
 }

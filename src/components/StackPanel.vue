@@ -85,7 +85,6 @@ function rowClass(cell: Cell): string[] {
 
 function valueClass(cell: Cell): string {
   if (cell.uninit) return 'text-gray-600 italic'
-  if (cell.kind === 'ptr') return 'text-purple-300 font-bold'
   if (cell.kind === 'arr') return 'text-green-300 font-bold'
   if (cell.kind === 'hw') return 'text-orange-300 font-bold'
   if (cell.isSP) return 'text-orange-300'
@@ -94,7 +93,6 @@ function valueClass(cell: Cell): string {
 }
 
 function labelClass(cell: Cell): string {
-  if (cell.kind === 'ptr') return 'text-purple-400 text-xs ml-2'
   if (cell.kind === 'arr') return 'text-green-400 text-xs ml-2'
   if (cell.kind === 'hw') return 'text-orange-400 text-xs ml-2'
   return 'text-gray-400 text-xs ml-2'

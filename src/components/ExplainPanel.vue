@@ -45,7 +45,6 @@
             </table>
           </div>
         </div>
-        <span v-if="step.isPtr" class="text-xs bg-purple-800 text-purple-200 px-1.5 py-0.5 rounded">ポインタ操作</span>
         <span v-if="step.isArr" class="text-xs bg-green-800 text-green-200 px-1.5 py-0.5 rounded">配列要素</span>
       </div>
       <p class="text-gray-200 text-sm pl-2">
@@ -55,9 +54,6 @@
       </p>
       <p class="text-gray-300 text-xs font-mono pl-2">{{ step.effect }}</p>
 
-      <div v-if="step.isPtr" class="bg-purple-900/30 border border-purple-800 rounded p-2 text-xs text-purple-200">
-        💡 ポインタ操作: アドレス値の取得・設定・間接参照が含まれます
-      </div>
       <div v-if="step.isArr" class="bg-green-900/30 border border-green-800 rounded p-2 text-xs text-green-200">
         💡 配列要素: ベースアドレス + オフセットで各要素にアクセスします
       </div>

@@ -60,10 +60,6 @@
 
             <span :class="[instrTextClass(i), 'shrink-0 min-w-[30ch]']">
               <span
-                v-if="currentStepData?.isPtr && activeAsmLine === i"
-                class="bg-purple-800 text-purple-200 px-1 rounded mr-1"
-              >ptr</span>
-              <span
                 v-if="currentStepData?.isArr && activeAsmLine === i"
                 class="bg-green-800 text-green-200 px-1 rounded mr-1"
               >arr</span>

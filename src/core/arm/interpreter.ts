@@ -12,7 +12,6 @@ export interface InterpretResult {
   effect: string
   comment: string   // concise inline annotation for CodePanel
   phase: Phase
-  isPtr?: boolean
   isArr?: boolean
   nextInstrIdx: number
 }

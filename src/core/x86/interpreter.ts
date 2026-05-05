@@ -12,7 +12,6 @@ export interface X86InterpretResult {
   effect: string
   comment: string
   phase: Phase
-  isPtr?: boolean
   isArr?: boolean
   nextInstrIdx: number
 }
@@ -222,7 +221,7 @@ function makeResult(
   effect: string,
   comment: string,
   nextInstrIdx: number = ctx.nextDefault,
-  extras: { isPtr?: boolean; isArr?: boolean } = {},
+  extras: { isArr?: boolean } = {},
 ): X86InterpretResult {
   return {
     update: { ...update, pc: BASE_PC + nextInstrIdx * INSTR_SIZE },
@@ -261,8 +260,7 @@ function handleMovGroup(
       const comment = `${memStr} ← ${src}`
       return makeResult(ctx,
         { stackSet: { [addr]: val >>> 0 } },
-        `メモリにデータを書き込み`, comment, comment, ctx.nextDefault,
-        { isPtr: (val >>> 0) >= 0x7f0000 && (val >>> 0) <= 0x800000 },
+        `メモリにデータを書き込み`, comment, comment,
       )
     }
     return { error: `MOV: 不正なオペランド` }

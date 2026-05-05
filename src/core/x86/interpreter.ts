@@ -3,6 +3,7 @@
 import type { MachineState, StateUpdate, Phase, StackFrame, Flags } from '../types'
 import { BASE_PC_X86, VIRTUAL_INSTR_SIZE, FRAME_COLORS_CYCLE } from '../types'
 import { hexU32 } from '../simulator'
+import { updateTopFrame } from '../utils'
 import type { X86Instruction, X86Operand } from './parser'
 
 export interface X86InterpretResult {
@@ -309,7 +310,7 @@ function handleStackX86(
     const effect = `rsp ← ${hexU32(newSp)}; [rsp] ← ${src}`
     const comment = `${src} をスタックに保存`
     return makeResult(ctx,
-      { sp: newSp, stackSet: { [newSp]: val >>> 0 } },
+      { sp: newSp, stackSet: { [newSp]: val >>> 0 }, frames: updateTopFrame(newSp, state) },
       `${src} をスタックにプッシュ`, effect, comment, ctx.nextDefault,
       { isPtr: isAddrVal },
     )
@@ -322,7 +323,7 @@ function handleStackX86(
     const effect = `${op0.name} ← [rsp]=${hexU32(state.sp)}(${fmtDec(val)}); rsp ← ${hexU32(newSp)}`
     const comment = `スタックから ${fmtRV(op0.name, val)} を復元`
     return makeResult(ctx,
-      { ...regUpdate(op0.name, val), sp: newSp, stackRemove: [state.sp] },
+      { ...regUpdate(op0.name, val), sp: newSp, stackRemove: [state.sp], frames: updateTopFrame(newSp, state) },
       `スタックからポップ`, effect, comment,
     )
   }
@@ -347,7 +348,8 @@ function handleArithX86(
     const bStr = op1.type === 'reg' ? fmtRV(op1.name, b) : fmtDec(b)
     if (op0.type === 'reg') {
       const comment = `${op0.name} ← ${fmtRV(op0.name, a)} + ${bStr} = ${fmtDec(result)}`
-      return makeResult(ctx, { ...regUpdate(op0.name, result), flags }, `加算 (ADD)`, comment, comment)
+      const extra = op0.name === 'rsp' ? { frames: updateTopFrame(result >>> 0, state) } : {}
+      return makeResult(ctx, { ...regUpdate(op0.name, result), flags, ...extra }, `加算 (ADD)`, comment, comment)
     }
     if (op0.type === 'mem') {
       const addr = getMemAddr(op0, state)
@@ -367,7 +369,8 @@ function handleArithX86(
     const bStr = op1.type === 'reg' ? fmtRV(op1.name, b) : fmtDec(b)
     if (op0.type === 'reg') {
       const comment = `${op0.name} ← ${fmtRV(op0.name, a)} - ${bStr} = ${fmtDec(result)}`
-      return makeResult(ctx, { ...regUpdate(op0.name, result), flags }, `減算 (SUB)`, comment, comment)
+      const extra = op0.name === 'rsp' ? { frames: updateTopFrame(result >>> 0, state) } : {}
+      return makeResult(ctx, { ...regUpdate(op0.name, result), flags, ...extra }, `減算 (SUB)`, comment, comment)
     }
     if (op0.type === 'mem') {
       const addr = getMemAddr(op0, state)

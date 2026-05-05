@@ -3,6 +3,7 @@
 import type { MachineState, StateUpdate, Phase, StackFrame, StackMeta, Flags } from '../types'
 import { BASE_PC_ARM, FRAME_COLORS_CYCLE } from '../types'
 import { hexU32 } from '../simulator'
+import { updateTopFrame } from '../utils'
 import type { ParsedInstruction, Operand } from './parser'
 
 export interface InterpretResult {
@@ -229,15 +230,6 @@ function checkCond(c: string, state: MachineState): boolean {
  * スタックは下方向に成長するため、lo = 現在の SP（フレーム下端）を追跡することで
  * FrameViz がフレームサイズを正しく描画できる。
  */
-function updateTopFrame(newSp: number, state: MachineState): StackFrame[] {
-  if (state.frames.length === 0) return []
-  const frames = [...state.frames]
-  const last = frames[frames.length - 1]
-  if (!last) return frames
-  frames[frames.length - 1] = { ...last, lo: newSp }
-  return frames
-}
-
 // ── Instruction group handlers ───────────────────────────────────────────────
 // 各ハンドラーは担当外の命令に対して null を返す（dispatch パターン）
 

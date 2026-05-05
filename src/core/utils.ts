@@ -1,4 +1,25 @@
-// ARM・x86 パーサー共通のユーティリティ関数
+// ARM・x86 パーサー・インタープリタ共通のユーティリティ関数
+
+import type { MachineState, StackFrame } from './types'
+
+/**
+ * トップフレームの lo（スタック下限）を新しい SP 値で更新して返す。
+ *
+ * PUSH/SUB SP など SP が変化する命令で呼び出し、フレームサイズ表示を最新に保つ。
+ * フレームが存在しない場合は空配列をそのまま返す。
+ *
+ * @param newSp - 更新後の SP 値
+ * @param state - 現在のマシン状態
+ * @returns lo が更新されたフレーム配列のコピー
+ */
+export function updateTopFrame(newSp: number, state: MachineState): StackFrame[] {
+  if (state.frames.length === 0) return []
+  const frames = [...state.frames]
+  const last = frames[frames.length - 1]
+  if (!last) return frames
+  frames[frames.length - 1] = { ...last, lo: newSp }
+  return frames
+}
 
 /**
  * オペランド文字列を括弧ネストを考慮してカンマで分割する。

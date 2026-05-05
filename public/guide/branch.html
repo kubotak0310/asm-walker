@@ -227,14 +227,44 @@
     計算結果自体はどこにも保存されません（比較のためだけに使う減算命令です）。
   </p>
 
-  <pre><code><span class="comment">; CMP 3, 3  (a == b の場合)</span>
-<span class="comment">; 3 - 3 = 0 → Z=1, N=0, C=0, V=0</span>
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — CMP のフラグ</h4>
+      <pre><code><span class="comment">; CMP 3, 3  (a == b)</span>
+<span class="comment">; → Z=1, N=0, C=1, V=0</span>
 
-<span class="comment">; CMP 5, 3  (a &gt; b の場合)</span>
-<span class="comment">; 5 - 3 = 2 → Z=0, N=0, C=0, V=0</span>
+<span class="comment">; CMP 5, 3  (a &gt; b)</span>
+<span class="comment">; → Z=0, N=0, C=1, V=0</span>
 
-<span class="comment">; CMP 3, 5  (a &lt; b の場合)</span>
-<span class="comment">; 3 - 5 = -2 → Z=0, N=1, C=1, V=0</span></code></pre>
+<span class="comment">; CMP 3, 5  (a &lt; b)</span>
+<span class="comment">; → Z=0, N=1, C=0, V=0</span></code></pre>
+      <p style="font-size:0.85em;color:#aaa;margin-top:0.5em;">
+        ARM の C フラグは <strong>「借りが発生しなかった」ときに 1</strong>。<br>
+        <code>a &gt;= b</code> → C=1、<code>a &lt; b</code> → C=0
+      </p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — CMP のフラグ</h4>
+      <pre><code><span class="comment">; CMP 3, 3  (a == b)</span>
+<span class="comment">; → Z=1, N=0, C=0, V=0</span>
+
+<span class="comment">; CMP 5, 3  (a &gt; b)</span>
+<span class="comment">; → Z=0, N=0, C=0, V=0</span>
+
+<span class="comment">; CMP 3, 5  (a &lt; b)</span>
+<span class="comment">; → Z=0, N=1, C=1, V=0</span></code></pre>
+      <p style="font-size:0.85em;color:#aaa;margin-top:0.5em;">
+        x86 の CF は <strong>「借りが発生した」ときに 1</strong>。<br>
+        <code>a &lt; b</code> → CF=1、<code>a &gt;= b</code> → CF=0
+      </p>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>ARM と x86 で C フラグの意味が逆です</strong><br>
+    同じ <code>CMP 3, 5</code>（a &lt; b）でも ARM は C=0、x86 は CF=1 となります。
+    AsmWalker でモードを切り替えながら CMP 命令のフラグ変化を比べてみてください。
+  </div>
 
   <h3>TEST — ビットマスク確認</h3>
 

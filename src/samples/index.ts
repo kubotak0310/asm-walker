@@ -35,13 +35,16 @@ int main() {
     id: 'branch',
     name: '条件分岐',
     cCode: `int compare(int a, int b) {
-    if (a < b) return 1;
+    if (a < b) return -1;
     if (a == b) return 0;
-    return -1;
+    return 1;
 }
 
 int main() {
-    return compare(5, 10);
+    int r1 = compare(3, 3);
+    int r2 = compare(5, 3);
+    int r3 = compare(3, 5);
+    return r1 + r2 + r3;
 }`,
   },
   {

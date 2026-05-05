@@ -108,10 +108,15 @@
             {{ compilerId.includes('arm') ? 'ARM' : 'x86-64' }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}
           </span>
         </div>
-        <!-- gcc raw output（エラー時 + 警告あり時） -->
+        <!-- gcc raw output（GCC エラー・警告あり時） -->
         <div v-if="gccOutput" class="rounded overflow-hidden border border-gray-600">
           <div class="px-2 py-1 bg-gray-700 text-gray-400 text-xs">コンパイラ出力 (gcc stderr)</div>
           <pre class="text-xs font-mono bg-gray-900 text-gray-200 px-3 py-2 overflow-auto max-h-48 whitespace-pre-wrap leading-relaxed">{{ gccOutput }}</pre>
+        </div>
+        <!-- パース/トレースエラー（GCC は成功したがシミュレーター側でエラーが起きた場合） -->
+        <div v-else-if="errors.length" class="rounded overflow-hidden border border-red-700">
+          <div class="px-2 py-1 bg-red-900/50 text-red-400 text-xs">シミュレーターエラー</div>
+          <pre class="text-xs font-mono bg-gray-900 text-red-300 px-3 py-2 overflow-auto max-h-48 whitespace-pre-wrap leading-relaxed">{{ errors.join('\n') }}</pre>
         </div>
       </div>
     </div>

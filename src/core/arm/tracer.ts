@@ -33,7 +33,7 @@ export function traceProgram(
   maxSteps = 200,
   cLineMap?: Map<number, number>,
 ): TraceResult {
-  const { instructions, labels, literalPool, sourceLines } = parseResult
+  const { instructions, labels, dataLabels, romData, sourceLines } = parseResult
   const instrCount = instructions.length
 
   // Build asmLines from source text (preserves all lines including blank/labels)
@@ -52,12 +52,18 @@ export function traceProgram(
     return { states: [initialState], steps: [], asmLines, error: '実行可能な命令がありません' }
   }
 
+  // Pre-populate ROM data (literal pool .word values) into state.stack so LDR/LDM can access them
+  const romStack = romData.size > 0
+    ? { ...initialState.stack, ...Object.fromEntries(romData) }
+    : initialState.stack
+  const baseWithRom: MachineState = romData.size > 0 ? { ...initialState, stack: romStack } : initialState
+
   // Start from 'main' if defined, otherwise from the first instruction
   const startInstrIdx = labels.get('MAIN') ?? 0
   const startPc = BASE_PC + startInstrIdx * 4
   const startState: MachineState = startInstrIdx > 0
-    ? { ...initialState, pc: startPc }
-    : initialState
+    ? { ...baseWithRom, pc: startPc }
+    : baseWithRom
 
   const states: MachineState[] = [startState]
   const steps: StepData[] = []
@@ -78,7 +84,7 @@ export function traceProgram(
       instrIdx,
       state,
       labels,
-      literalPool,
+      dataLabels,
       instrCount,
       callStack.length,
     )

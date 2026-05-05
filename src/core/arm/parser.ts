@@ -25,8 +25,9 @@ export interface ParseError {
 
 export interface ParseResult {
   instructions: ParsedInstruction[]
-  labels: Map<string, number>    // label name (uppercase) → instruction index
-  literalPool: Map<string, number>  // label name (uppercase) → .word value
+  labels: Map<string, number>       // label name (uppercase) → instruction index
+  dataLabels: Map<string, number>   // literal-pool label (uppercase) → simulated ROM address
+  romData: Map<number, number>      // ROM address → value (pre-populated from .word directives)
   sourceLines: string[]
   errors: ParseError[]
 }
@@ -239,7 +240,15 @@ export function parseARM(text: string): ParseResult {
     | { kind: 'instr'; lineIndex: number; text: string }
 
   const items: LineItem[] = []
-  const literalPool = new Map<string, number>()
+
+  // Simulated ROM region for GCC literal pool data (.word directives).
+  // GCC emits `ldr rN, .LX` + `.LX: .word val_or_addr` for large constants / array inits.
+  // We assign each data label a fake ROM address so ldm/ldr can access them via state.stack.
+  const BASE_ROM = 0x08010000
+  const dataLabels = new Map<string, number>()
+  const pendingWords: Array<{ addr: number; rawValue: string }> = []
+  let romOffset = 0
+  let lastDataLabel: string | null = null
 
   for (let i = 0; i < sourceLines.length; i++) {
     const raw = sourceLines[i] ?? ''
@@ -254,19 +263,16 @@ export function parseARM(text: string): ParseResult {
     const cleaned = (firstComment < Infinity ? raw.slice(0, firstComment) : raw).trim()
     if (!cleaned) continue
 
-    // .word directive: record numeric value into literalPool under the preceding label.
-    // GCC uses this for PC-relative literal pool loads: `ldr r2, .L5` / `.L5: .word 3`
+    // .word directive: assign ROM address to the preceding label and queue for resolution.
+    // Two cases: `.word 3` (immediate) and `.word .L6` (address of another label).
     const wordMatch = cleaned.match(/^\.word\s+(.+)/)
     if (wordMatch) {
-      for (let j = items.length - 1; j >= 0; j--) {
-        const it = items[j]
-        if (!it) break
-        if (it.kind === 'label') {
-          literalPool.set(it.name, parseImmediate(wordMatch[1] ?? ''))
-          break
-        }
-        if (it.kind === 'instr') break
+      const addr = BASE_ROM + romOffset
+      if (lastDataLabel !== null && !dataLabels.has(lastDataLabel)) {
+        dataLabels.set(lastDataLabel, addr)
       }
+      pendingWords.push({ addr, rawValue: (wordMatch[1] ?? '').trim() })
+      romOffset += 4
       continue
     }
 
@@ -280,13 +286,28 @@ export function parseARM(text: string): ParseResult {
       const rawName = (labelMatch[1] ?? '').trim()
       // Normalize: strip Compiler Explorer parameter types 'square(int)' → 'SQUARE'
       const baseName = rawName.replace(/\(.*$/, '').trim()
-      items.push({ kind: 'label', name: baseName.toUpperCase() })
+      const upperName = baseName.toUpperCase()
+      items.push({ kind: 'label', name: upperName })
+      lastDataLabel = upperName  // may become a data label if followed by .word
       const rest = (labelMatch[2] ?? '').trim()
       if (rest) {
         items.push({ kind: 'instr', lineIndex: i, text: rest })
+        lastDataLabel = null  // trailing instruction means this is a code label
       }
     } else {
       items.push({ kind: 'instr', lineIndex: i, text: cleaned })
+      lastDataLabel = null  // instruction seen — last label was a code label
+    }
+  }
+
+  // Resolve pendingWords: immediate values stored directly, label refs resolved to ROM address
+  const romData = new Map<number, number>()
+  for (const { addr, rawValue } of pendingWords) {
+    if (/^[A-Za-z_.]/.test(rawValue)) {
+      const refName = rawValue.replace(/\(.*$/, '').trim().toUpperCase()
+      romData.set(addr, dataLabels.get(refName) ?? 0)
+    } else {
+      romData.set(addr, parseImmediate(rawValue))
     }
   }
 
@@ -337,5 +358,5 @@ export function parseARM(text: string): ParseResult {
     instructions.push({ lineIndex, raw: text, mnemonic: base, cond, sFlag, operands })
   }
 
-  return { instructions, labels, literalPool, sourceLines, errors }
+  return { instructions, labels, dataLabels, romData, sourceLines, errors }
 }

@@ -506,16 +506,18 @@ function handleCompare(
 function handleLoad(
   mnemonic: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
-  literalPool: Map<string, number>,
+  dataLabels: Map<string, number>,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'LDR' && mnemonic !== 'LDRB' && mnemonic !== 'LDRH') return null
   const dst = operands[0]
   const src = operands[1]
   if (dst?.type !== 'reg') return { error: `LDR: レジスタが必要: ${raw}` }
 
-  // PC-relative literal pool load: `ldr r2, .L5` — GCC encodes constants > 8-bit this way
+  // PC-relative literal pool load: `ldr r2, .L5`
+  // Resolve label → ROM address, then read from state.stack (pre-populated with romData)
   if (src?.type === 'label') {
-    const val = literalPool.get(src.name) ?? 0
+    const romAddr = dataLabels.get(src.name) ?? 0
+    const val = state.stack[romAddr] ?? 0
     const comment = `${dst.name} ← ${fmtDec(val)}（定数プール）`
     return {
       update: { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 },
@@ -667,6 +669,64 @@ function handleStack(
 }
 
 /**
+ * 複数レジスタのロード／ストア命令（LDM / STM とそのサフィックス変形）を処理する。
+ *
+ * GCC は配列初期化で `ldm r2, {r0,r1,r2}` + `stm r7, {r0,r1,r2}` パターンを使う。
+ * ベースレジスタがレジスタリストに含まれる場合でも、アドレス計算は元の値で行う。
+ */
+function handleLDMSTM(
+  mnemonic: string, operands: Operand[],
+  state: MachineState, phase: Phase, defaultNext: number, raw: string,
+): InterpretResult | { error: string } | null {
+  const isLDM = mnemonic === 'LDM' || mnemonic === 'LDMIA' || mnemonic === 'LDMFD'
+  const isSTM = mnemonic === 'STM' || mnemonic === 'STMIA' || mnemonic === 'STMEA'
+  if (!isLDM && !isSTM) return null
+
+  const base = operands[0]
+  const reglistOp = operands[1]
+  if (base?.type !== 'reg') return { error: `${mnemonic}: ベースレジスタが必要: ${raw}` }
+  if (reglistOp?.type !== 'reglist') return { error: `${mnemonic}: レジスタリストが必要: ${raw}` }
+
+  const baseAddr = getReg(base.name, state)
+  const regs = [...reglistOp.regs].sort((a, b) => regOrder(a) - regOrder(b))
+
+  if (isLDM) {
+    const newRegs: Record<string, number> = {}
+    let addr = baseAddr
+    for (const reg of regs) {
+      newRegs[reg] = state.stack[addr] ?? 0
+      addr += 4
+    }
+    const comment = `${regs.join(', ')} ← [${hexU32(baseAddr)}+]`
+    return {
+      update: { regs: newRegs, pc: BASE_PC + defaultNext * 4 },
+      explain: '複数レジスタをメモリからロード',
+      effect: comment,
+      comment,
+      phase, nextInstrIdx: defaultNext,
+    }
+  }
+
+  // STM
+  const stackSet: Record<number, number> = {}
+  const metaSet: Record<number, StackMeta> = {}
+  let addr = baseAddr
+  for (const reg of regs) {
+    stackSet[addr] = getReg(reg, state)
+    metaSet[addr] = { label: reg.toUpperCase(), kind: 'sw' }
+    addr += 4
+  }
+  const comment = `[${hexU32(baseAddr)}+] ← ${regs.join(', ')}`
+  return {
+    update: { stackSet, metaSet, pc: BASE_PC + defaultNext * 4 },
+    explain: '複数レジスタをメモリにストア',
+    effect: comment,
+    comment,
+    phase, nextInstrIdx: defaultNext,
+  }
+}
+
+/**
  * 分岐命令（B / BL / BX / CBZ / CBNZ）を処理する。
  */
 function handleBranch(
@@ -792,7 +852,7 @@ export function interpretInstruction(
   instrIdx: number,
   state: MachineState,
   labels: Map<string, number>,
-  literalPool: Map<string, number>,
+  dataLabels: Map<string, number>,
   instrCount: number,
   callDepth: number,
 ): InterpretResult | { error: string } {
@@ -810,9 +870,10 @@ export function interpretInstruction(
     handleBitwise(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
     handleShift(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
     handleCompare(mnemonic, operands, state, phase, defaultNext, raw) ??
-    handleLoad(mnemonic, operands, state, phase, defaultNext, raw, literalPool) ??
+    handleLoad(mnemonic, operands, state, phase, defaultNext, raw, dataLabels) ??
     handleStore(mnemonic, operands, state, phase, defaultNext, raw) ??
     handleStack(mnemonic, operands, state, phase, defaultNext, raw, instrCount) ??
+    handleLDMSTM(mnemonic, operands, state, phase, defaultNext, raw) ??
     handleBranch(mnemonic, cond, operands, state, phase, defaultNext, raw, labels, instrCount, callDepth) ??
     (mnemonic === 'NOP' ? {
       update: { pc: BASE_PC + defaultNext * 4 },

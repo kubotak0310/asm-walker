@@ -2,7 +2,7 @@
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
 
     <!-- コンパイル済みのバー（view mode）: 高さ固定でレイアウトシフトなし -->
-    <div v-if="hasResult && compileBarState" class="px-3 py-2 bg-gray-700 flex items-center gap-2 min-h-[38px]">
+    <div v-if="hasResult && compileBarState" class="px-3 py-2 bg-gray-700 flex items-center gap-2 h-[38px]">
       <!-- ① bl命令: 関数呼び出し + 引数値 -->
       <template v-if="compileBarState.type === 'call'">
         <span class="text-blue-400 text-xs font-bold shrink-0">→ {{ compileBarState.display }}</span>
@@ -30,10 +30,10 @@
         <span class="text-gray-400 text-xs font-mono truncate">{{ compileBarState.compiler }} / {{ compileBarState.opt }}{{ compileBarState.extra ? ' ' + compileBarState.extra : '' }}</span>
       </template>
       <button
-        class="ml-auto text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 px-3 py-1 rounded transition-colors shrink-0"
+        class="ml-auto text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded transition-colors shrink-0 font-medium"
         @click="hasResult = false"
       >
-        ✏ 再編集
+        ✏ コードを編集
       </button>
     </div>
 

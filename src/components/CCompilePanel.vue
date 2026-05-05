@@ -41,17 +41,21 @@
     <div v-show="!hasResult">
       <!-- Header -->
       <div class="px-3 py-2 bg-gray-700 flex flex-wrap items-center gap-2">
-        <span class="text-gray-300 text-xs font-bold shrink-0">C コンパイル</span>
+        <span class="text-gray-300 text-xs font-bold shrink-0">C コード</span>
+        <span class="text-gray-400 text-xs shrink-0">✏ 編集可能</span>
         <div class="flex items-center gap-2 ml-auto flex-wrap">
           <!-- Sample selector -->
+          <span class="text-gray-400 text-xs shrink-0">サンプル読み込み:</span>
           <select
             v-model="selectedSampleId"
             class="bg-gray-600 text-gray-200 text-xs rounded px-2 py-1 border border-gray-500"
             @change="onSampleSelect"
           >
-            <option value="" disabled hidden>サンプルを選択してください...</option>
+            <option value="" disabled hidden>── 選択 ──</option>
             <option v-for="s in SAMPLES" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
+          <!-- 区切り -->
+          <span class="border-l border-gray-500 self-stretch mx-1" />
           <!-- Compiler selector -->
           <select
             v-model="compilerId"
@@ -142,7 +146,7 @@ const editorEl = ref<HTMLElement | null>(null)
 const compilerId = ref('carm1121')
 const optLevel = ref('-O0')
 const extraFlags = ref('-mcpu=cortex-m3 -mthumb')
-const selectedSampleId = ref('')
+const selectedSampleId = ref(SAMPLES[0]?.id ?? '')
 const errors = ref<string[]>([])
 const hasResult = ref(false)
 let view: EditorView | null = null

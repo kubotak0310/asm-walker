@@ -1,5 +1,7 @@
 // x86-64 Intel syntax assembly parser (GCC output with -masm=intel)
 
+import { splitByComma } from '../utils'
+
 export interface X86Instruction {
   lineIndex: number   // index into sourceLines[]
   raw: string
@@ -292,39 +294,6 @@ function parseOperand(s: string): X86Operand | null {
   return null
 }
 
-/**
- * オペランド文字列を `[...]` のネストを考慮してカンマで分割する。
- *
- * 単純な `split(',')` では `[rbp-4]` 内部のカンマ（SIB 形式など将来のケース）を
- * 誤って分割してしまうため、`[` / `]` の深さを追跡しながら分割する。
- *
- * @param s - カンマ区切りのオペランド文字列
- * @returns 分割後のオペランド文字列配列
- *
- * @example
- * splitOperands('DWORD PTR [rbp-4], rax')
- * // → ['DWORD PTR [rbp-4]', 'rax']
- *
- * splitOperands('rdi, rsi, rdx')
- * // → ['rdi', 'rsi', 'rdx']
- */
-function splitOperands(s: string): string[] {
-  const result: string[] = []
-  let depth = 0
-  let cur = ''
-  for (const ch of s) {
-    if (ch === '[') depth++
-    else if (ch === ']') depth--
-    if (ch === ',' && depth === 0) {
-      result.push(cur.trim())
-      cur = ''
-    } else {
-      cur += ch
-    }
-  }
-  if (cur.trim()) result.push(cur.trim())
-  return result
-}
 
 /**
  * ソース行からラベル名を抽出して大文字正規化した文字列を返す。
@@ -442,7 +411,7 @@ export function parseX86(asmText: string): X86ParseResult {
     const mnemonic = (spaceIdx >= 0 ? trimmed.slice(0, spaceIdx) : trimmed).toUpperCase()
     const opStr = spaceIdx >= 0 ? trimmed.slice(spaceIdx + 1).trim() : ''
 
-    const operandParts = opStr ? splitOperands(opStr) : []
+    const operandParts = opStr ? splitByComma(opStr) : []
     const operands: X86Operand[] = []
 
     for (const part of operandParts) {

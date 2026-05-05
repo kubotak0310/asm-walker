@@ -100,3 +100,18 @@ export const PHASE_COLORS: Record<Phase, string> = {
   isr: 'green',
   ret: 'coral',
 }
+
+// 無限ループ対策のトレース上限ステップ数（ARM / x86 トレーサー共通）
+export const MAX_TRACE_STEPS = 500
+
+// 仮想命令サイズ（ARM Thumb / x86-64 は可変長だが、シミュレーター内部では 4byte に統一して PC を管理する）
+export const VIRTUAL_INSTR_SIZE = 4
+
+// アーキテクチャ別の引数レジスタ順（ARM ABI: r0〜r3 / x86-64 System V ABI: rdi/rsi/rdx/rcx/r8/r9）
+export const ARG_REGS: Record<Arch, readonly string[]> = {
+  arm: ['r0', 'r1', 'r2', 'r3'],
+  x86: ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9'],
+}
+
+// フレーム深度でローテーションする色（FrameViz・StackPanel・インタープリタ共通で 3 色をループ）
+export const FRAME_COLORS_CYCLE: ReadonlyArray<'purple' | 'green' | 'orange'> = ['purple', 'green', 'orange']

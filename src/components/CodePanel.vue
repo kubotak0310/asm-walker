@@ -4,12 +4,12 @@
       <span class="text-gray-300 text-xs font-bold">アセンブラ</span>
       <div class="flex items-center gap-2">
         <span
-          v-if="activeAsmLine >= 0 && lineAddrs[activeAsmLine] !== undefined"
+          v-if="pcDisplay?.mode === 'address'"
           class="text-xs font-mono bg-yellow-900/60 text-yellow-200 px-2 py-0.5 rounded"
         >
-          PC → {{ hexU32(lineAddrs[activeAsmLine]!) }}
+          PC → {{ hexU32(pcDisplay.value) }}
         </span>
-        <span v-else-if="activeAsmLine < 0 && currentStepData?.type === 'hw'" class="text-xs text-orange-400">
+        <span v-else-if="pcDisplay?.mode === 'hw'" class="text-xs text-orange-400">
           PC → HW処理中
         </span>
         <div v-if="preset?.asmCode?.length" class="relative flex items-center">
@@ -100,6 +100,15 @@ const { preset, currentStepData } = useSimulator()
 const asmCodeEl = ref<HTMLElement | null>(null)
 const activeAsmLine = computed(() => currentStepData.value?.asmLine ?? -1)
 const isHW = computed(() => currentStepData.value?.type === 'hw')
+
+// テンプレートの複合条件式をscript側に集約
+const pcDisplay = computed(() => {
+  if (activeAsmLine.value >= 0 && lineAddrs.value[activeAsmLine.value] !== undefined)
+    return { mode: 'address' as const, value: lineAddrs.value[activeAsmLine.value]! }
+  if (activeAsmLine.value < 0 && currentStepData.value?.type === 'hw')
+    return { mode: 'hw' as const }
+  return null
+})
 
 const executedLines = computed(() => {
   const set = new Set<number>()

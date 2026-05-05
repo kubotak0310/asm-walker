@@ -2,32 +2,32 @@
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
 
     <!-- コンパイル済みのバー（view mode）: 高さ固定でレイアウトシフトなし -->
-    <div v-if="hasResult" class="px-3 py-2 bg-gray-700 flex items-center gap-2 min-h-[38px]">
+    <div v-if="hasResult && compileBarState" class="px-3 py-2 bg-gray-700 flex items-center gap-2 min-h-[38px]">
       <!-- ① bl命令: 関数呼び出し + 引数値 -->
-      <template v-if="callTarget">
-        <span class="text-blue-400 text-xs font-bold shrink-0">→ {{ callDisplay }}</span>
+      <template v-if="compileBarState.type === 'call'">
+        <span class="text-blue-400 text-xs font-bold shrink-0">→ {{ compileBarState.display }}</span>
         <span class="text-blue-300 text-xs">呼び出し</span>
         <span class="text-gray-300 text-xs hidden lg:inline">{{ arch === 'x86' ? 'x86-64 ABI: rdi〜r9 が引数レジスタ' : 'ARM ABI: r0〜r3 が引数レジスタ' }}</span>
       </template>
       <!-- ② return命令: 実行完了 + 戻り値 -->
-      <template v-else-if="isReturnStep">
-        <span class="text-green-400 text-xs font-bold shrink-0">✅ {{ currentFuncName }}() 実行完了</span>
+      <template v-else-if="compileBarState.type === 'return'">
+        <span class="text-green-400 text-xs font-bold shrink-0">✅ {{ compileBarState.func }}() 実行完了</span>
         <span class="text-gray-500 text-xs">—</span>
         <span class="text-gray-300 text-xs">戻り値:</span>
-        <span class="text-yellow-200 text-xs font-bold font-mono">{{ returnReg }} = {{ returnHex }}</span>
-        <span class="text-gray-300 text-xs">({{ returnDec }})</span>
+        <span class="text-yellow-200 text-xs font-bold font-mono">{{ compileBarState.reg }} = {{ compileBarState.hex }}</span>
+        <span class="text-gray-300 text-xs">({{ compileBarState.dec }})</span>
         <span class="text-gray-300 text-xs hidden lg:inline">{{ arch === 'x86' ? 'x86-64 ABI: rax が戻り値レジスタ' : 'ARM ABI: r0 が関数の戻り値レジスタ' }}</span>
       </template>
       <!-- ③ 関数内実行中 -->
-      <template v-else-if="currentStep > 0">
-        <span class="text-gray-300 text-xs font-bold shrink-0">▶ {{ currentFuncName }}()</span>
+      <template v-else-if="compileBarState.type === 'running'">
+        <span class="text-gray-300 text-xs font-bold shrink-0">▶ {{ compileBarState.func }}()</span>
         <span class="text-gray-300 text-xs">実行中</span>
       </template>
       <!-- ④ 初期状態（step=0）: コンパイラ情報 -->
       <template v-else>
         <span class="text-green-400 text-xs font-bold shrink-0">✅ コンパイル成功</span>
         <span class="text-gray-500 text-xs">·</span>
-        <span class="text-gray-400 text-xs font-mono truncate">{{ compilerDisplayName }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}</span>
+        <span class="text-gray-400 text-xs font-mono truncate">{{ compileBarState.compiler }} / {{ compileBarState.opt }}{{ compileBarState.extra ? ' ' + compileBarState.extra : '' }}</span>
       </template>
       <button
         class="ml-auto text-xs bg-gray-600 hover:bg-gray-500 text-gray-200 px-3 py-1 rounded transition-colors shrink-0"
@@ -152,6 +152,15 @@ const COMPILER_NAMES: Record<string, string> = {
   'cg142': 'x86-64 GCC 14.2.0',
 }
 const compilerDisplayName = computed(() => COMPILER_NAMES[compilerId.value] ?? compilerId.value)
+
+// テンプレートの4状態分岐をscript側に集約してtemplate可読性を上げる
+const compileBarState = computed(() => {
+  if (!hasResult.value) return null
+  if (callTarget.value) return { type: 'call' as const, display: callDisplay.value }
+  if (isReturnStep.value) return { type: 'return' as const, func: currentFuncName.value, reg: returnReg.value, hex: returnHex.value, dec: returnDec.value }
+  if (currentStep.value > 0) return { type: 'running' as const, func: currentFuncName.value }
+  return { type: 'success' as const, compiler: compilerDisplayName.value, opt: optLevel.value, extra: extraFlags.value }
+})
 
 const DEFAULT_TEXT = SAMPLES[0]?.cCode ?? ''
 

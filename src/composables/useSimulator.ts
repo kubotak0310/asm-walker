@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import type { MachineState, Arch, PresetData } from '@/core/types'
-import { BASE_SP_ARM, BASE_PC_ARM, BASE_SP_X86, BASE_PC_X86 } from '@/core/types'
+import { BASE_SP_ARM, BASE_PC_ARM, BASE_SP_X86, BASE_PC_X86, MAX_TRACE_STEPS, ARG_REGS } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
 import { parseARM } from '@/core/arm/parser'
 import { traceProgram } from '@/core/arm/tracer'
@@ -254,9 +254,7 @@ const callDisplay = computed<string | null>(() => {
   if (!name) return null
   const count = callArgCount.value
   if (count === null) return `${name}()`
-  const argRegs = arch.value === 'x86'
-    ? ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9']
-    : ['r0', 'r1', 'r2', 'r3']
+  const argRegs = ARG_REGS[arch.value]
   const args = argRegs.slice(0, count).map(r => `${r}=${currentState.value.regs[r] ?? 0}`)
   return `${name}(${args.join(', ')})`
 })
@@ -365,7 +363,7 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         compileError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
         return
       }
-      const result = traceProgram(parseResult, INITIAL_STATE, 500, output.cLineMap)
+      const result = traceProgram(parseResult, INITIAL_STATE, MAX_TRACE_STEPS, output.cLineMap)
       compileError.value = result.error ?? null
       states.value = result.states
       preset.value = {
@@ -383,7 +381,7 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         compileError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
         return
       }
-      const result = traceX86(parseResult, X86_INITIAL_STATE, 500, output.cLineMap)
+      const result = traceX86(parseResult, X86_INITIAL_STATE, MAX_TRACE_STEPS, output.cLineMap)
       compileError.value = result.error ?? null
       states.value = result.states
       preset.value = {

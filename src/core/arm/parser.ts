@@ -1,5 +1,7 @@
 // ARM assembly text parser — two-pass label resolution
 
+import { splitByComma } from '../utils'
+
 export interface ParsedInstruction {
   lineIndex: number  // index into sourceLines[]
   raw: string
@@ -155,32 +157,6 @@ function parseReglist(inner: string): string[] {
   return regs
 }
 
-/**
- * オペランド文字列をカンマで分割する。
- *
- * `[]`・`{}`・`()` のネストを考慮し、括弧内のカンマでは分割しない。
- * これにより `[r0, #4]` や `{r0, r1}` が誤って分割されるのを防ぐ。
- *
- * @param s - 分割するオペランド文字列
- * @returns 分割されたトークンの配列
- */
-function splitByComma(s: string): string[] {
-  const parts: string[] = []
-  let depth = 0
-  let current = ''
-  for (const ch of s) {
-    if (ch === '[' || ch === '{' || ch === '(') depth++
-    else if (ch === ']' || ch === '}' || ch === ')') depth--
-    else if (ch === ',' && depth === 0) {
-      parts.push(current)
-      current = ''
-      continue
-    }
-    current += ch
-  }
-  if (current.trim()) parts.push(current)
-  return parts
-}
 
 /**
  * 単一オペランド文字列を Operand 型に変換する。

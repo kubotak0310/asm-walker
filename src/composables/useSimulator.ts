@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { MachineState, Arch, PresetData } from '@/core/types'
 import { BASE_SP_ARM, BASE_PC_ARM, BASE_SP_X86, BASE_PC_X86, MAX_TRACE_STEPS, ARG_REGS } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
@@ -259,6 +259,26 @@ const callDisplay = computed<string | null>(() => {
   return `${name}(${args.join(', ')})`
 })
 
+/**
+ * 直前に実行された BL/CALL 命令の引数付き表示文字列を保持する。
+ *
+ * callTarget が非 null になった瞬間（= BL/CALL ステップ）に引数値を確定し、
+ * 以降の「実行中」バー表示でその値を使い続ける。
+ * アーキ切り替え・再編集時にリセットされる。
+ *
+ * @example 'compare(3, 3)' / 'add(1, 2)' / 'func()'（引数不明時）
+ */
+const capturedCallDisplay = ref<string | null>(null)
+
+watch(callTarget, (target) => {
+  if (!target) return
+  const count = callArgCount.value
+  if (count === null) { capturedCallDisplay.value = `${target}()`; return }
+  const argRegs = ARG_REGS[arch.value]
+  const args = argRegs.slice(0, count).map(r => String(currentState.value.regs[r] ?? 0))
+  capturedCallDisplay.value = `${target}(${args.join(', ')})`
+})
+
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 /**
@@ -279,6 +299,7 @@ function setArch(newArch: Arch) {
   states.value = [newArch === 'x86' ? X86_INITIAL_STATE : INITIAL_STATE]
   compileError.value = null
   gccOutput.value = ''
+  capturedCallDisplay.value = null
 }
 
 /**
@@ -324,6 +345,7 @@ function reset() {
 function clearSimulation() {
   preset.value = null
   currentStep.value = 0
+  capturedCallDisplay.value = null
 }
 
 /**
@@ -455,6 +477,7 @@ export function useSimulator() {
     callTarget,
     callArgCount,
     callDisplay,
+    capturedCallDisplay,
     setArch,
     nextStep,
     prevStep,

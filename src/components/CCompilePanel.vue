@@ -20,7 +20,7 @@
       </template>
       <!-- ③ 関数内実行中 -->
       <template v-else-if="compileBarState.type === 'running'">
-        <span class="text-gray-300 text-xs font-bold shrink-0">▶ {{ compileBarState.func }}()</span>
+        <span class="text-gray-300 text-xs font-bold shrink-0">▶ {{ compileBarState.display }}</span>
         <span class="text-gray-300 text-xs">実行中</span>
       </template>
       <!-- ④ 初期状態（step=0）: コンパイラ情報 -->
@@ -128,6 +128,7 @@ const {
   arch, simulateCompiled, compileError, isCompiling, setArch, currentStep, gccOutput,
   isReturnStep, currentFuncName, returnReg, returnHex, returnDec, callTarget, callDisplay,
   clearSimulation,
+  capturedCallDisplay,
 } = useSimulator()
 
 const COMPILER_DEFAULT_FLAGS: Record<string, string> = {
@@ -159,7 +160,7 @@ const compileBarState = computed(() => {
   if (!hasResult.value) return null
   if (callTarget.value) return { type: 'call' as const, display: callDisplay.value }
   if (isReturnStep.value) return { type: 'return' as const, func: currentFuncName.value, reg: returnReg.value, hex: returnHex.value, dec: returnDec.value }
-  if (currentStep.value > 0) return { type: 'running' as const, func: currentFuncName.value }
+  if (currentStep.value > 0) return { type: 'running' as const, display: capturedCallDisplay.value ?? `${currentFuncName.value}()` }
   return { type: 'success' as const, compiler: compilerDisplayName.value, opt: optLevel.value, extra: extraFlags.value }
 })
 

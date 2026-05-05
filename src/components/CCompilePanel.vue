@@ -59,17 +59,11 @@
           <!-- Compiler selector -->
           <select
             v-model="compilerId"
-            class="bg-gray-600 text-gray-200 text-xs rounded px-2 py-1 border border-gray-500"
+            :disabled="currentCompilers.length <= 1"
+            class="bg-gray-600 text-gray-200 text-xs rounded px-2 py-1 border border-gray-500 disabled:opacity-50 disabled:cursor-default"
             @change="onCompilerChange"
           >
-            <template v-if="arch === 'arm'">
-              <option value="carm1121">ARM GCC 11.2.1</option>
-              <option value="armug1320">ARM GCC 13.2.0</option>
-              <option value="armug1430">ARM GCC 14.3.0</option>
-            </template>
-            <template v-else>
-              <option value="cg142">x86-64 GCC 14.2.0</option>
-            </template>
+            <option v-for="c in currentCompilers" :key="c.id" :value="c.id">{{ c.name }}</option>
           </select>
           <!-- Optimization selector -->
           <select
@@ -105,7 +99,7 @@
             <span>{{ isCompiling ? 'コンパイル中...' : '▶ コンパイル & シミュレーション' }}</span>
           </button>
           <span v-if="!isCompiling && !errors.length" class="text-gray-500 text-xs font-mono">
-            {{ compilerId.includes('arm') ? 'ARM' : 'x86-64' }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}
+            {{ arch === 'arm' ? 'ARM' : 'x86-64' }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}
           </span>
         </div>
         <!-- gcc raw output（GCC エラー・警告あり時） -->
@@ -140,15 +134,25 @@ const {
   capturedCallDisplay,
 } = useSimulator()
 
+const ARM_COMPILERS = [
+  { id: 'carmug1520', name: 'ARM GCC 15.2.0' },
+]
+const X86_COMPILERS = [
+  { id: 'cg142', name: 'x86-64 GCC 14.2.0' },
+]
+const currentCompilers = computed(() => arch.value === 'arm' ? ARM_COMPILERS : X86_COMPILERS)
+
 const COMPILER_DEFAULT_FLAGS: Record<string, string> = {
-  carm1121:     '-mcpu=cortex-m3 -mthumb',
-  armug1320:    '-mcpu=cortex-m3 -mthumb',
-  armug1430:    '-mcpu=cortex-m3 -mthumb',
-  'cg142': '-masm=intel',
+  carmug1520: '-mcpu=cortex-m3 -mthumb',
+  'cg142':    '-masm=intel',
+}
+
+function compilerArch(id: string): 'arm' | 'x86' {
+  return id === 'cg142' ? 'x86' : 'arm'
 }
 
 const editorEl = ref<HTMLElement | null>(null)
-const compilerId = ref('carm1121')
+const compilerId = ref('carmug1520')
 const optLevel = ref('-O0')
 const extraFlags = ref('-mcpu=cortex-m3 -mthumb')
 const selectedSampleId = ref(SAMPLES[0]?.id ?? '')
@@ -156,13 +160,9 @@ const errors = ref<string[]>([])
 const hasResult = ref(false)
 let view: EditorView | null = null
 
-const COMPILER_NAMES: Record<string, string> = {
-  carm1121: 'ARM GCC 11.2.1',
-  armug1320: 'ARM GCC 13.2.0',
-  armug1430: 'ARM GCC 14.3.0',
-  'cg142': 'x86-64 GCC 14.2.0',
-}
-const compilerDisplayName = computed(() => COMPILER_NAMES[compilerId.value] ?? compilerId.value)
+const compilerDisplayName = computed(() =>
+  [...ARM_COMPILERS, ...X86_COMPILERS].find(c => c.id === compilerId.value)?.name ?? compilerId.value
+)
 
 // テンプレートの4状態分岐をscript側に集約してtemplate可読性を上げる
 const compileBarState = computed(() => {
@@ -228,7 +228,7 @@ function onSampleSelect() {
 }
 
 function onCompilerChange() {
-  setArch(compilerId.value.includes('arm') ? 'arm' : 'x86')
+  setArch(compilerArch(compilerId.value))
   extraFlags.value = COMPILER_DEFAULT_FLAGS[compilerId.value] ?? ''
 }
 
@@ -237,8 +237,8 @@ watch(() => arch.value, (newArch) => {
     compilerId.value = 'cg142'
     extraFlags.value = COMPILER_DEFAULT_FLAGS['cg142'] ?? ''
   } else if (newArch === 'arm' && compilerId.value === 'cg142') {
-    compilerId.value = 'carm1121'
-    extraFlags.value = COMPILER_DEFAULT_FLAGS['carm1121'] ?? ''
+    compilerId.value = 'carmug1520'
+    extraFlags.value = COMPILER_DEFAULT_FLAGS['carmug1520'] ?? ''
   }
   // アーキ切り替え時はエディタを開いた状態に戻す（再編集ボタン不要）
   hasResult.value = false

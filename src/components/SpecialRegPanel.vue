@@ -4,7 +4,7 @@
     <div class="p-2 space-y-1 font-mono text-xs">
       <RegRow :label="arch === 'x86' ? 'RSP' : 'SP'" :sub-label="arch === 'x86' ? 'Stack Pointer' : undefined" :value="state.sp" :prev="prev?.sp" :changed="state.sp !== prev?.sp" kind="orange" />
       <RegRow :label="arch === 'x86' ? 'RBP' : 'FP'" :sub-label="arch === 'x86' ? 'Base Pointer' : undefined" :value="fpValue" :prev="prevFpValue" :changed="fpValue !== prevFpValue" kind="normal" />
-      <RegRow v-if="arch === 'arm'" label="LR" :value="state.lr" :prev="prev?.lr" :changed="state.lr !== prev?.lr" :kind="isExcReturn ? 'exc' : 'normal'" />
+      <RegRow v-if="arch === 'arm'" label="LR" :value="state.lr" :prev="prev?.lr" :changed="state.lr !== prev?.lr" kind="normal" />
       <RegRow :label="arch === 'x86' ? 'RIP' : 'PC'" :sub-label="arch === 'x86' ? 'Instruction Pointer' : undefined" :value="displayPc" :changed="displayPcChanged" kind="normal" />
 
       <!-- Flags -->
@@ -15,15 +15,6 @@
         </div>
       </div>
 
-      <!-- Mode (ARM only) -->
-      <div v-if="arch === 'arm'" class="pt-1 border-t border-gray-700 mt-1">
-        <div class="flex items-center gap-2">
-          <span class="text-gray-400">Mode:</span>
-          <span :class="state.mode === 'handler' ? 'text-orange-300 font-bold' : 'text-green-300'">
-            {{ state.mode === 'handler' ? 'Handler Mode (IRQ中)' : 'Thread Mode' }}
-          </span>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -44,9 +35,6 @@ const prevFpValue = computed(() =>
   arch.value === 'arm' ? (prev.value?.regs['r11'] ?? 0) : (prev.value?.fp ?? 0),
 )
 
-const EXC_RETURN = 0xfffffff9
-
-const isExcReturn = computed(() => state.value.lr === EXC_RETURN)
 
 const flags = computed(() => {
   const cur = state.value.flags
@@ -73,16 +61,13 @@ const RegRow = defineComponent({
       const val = props.value ?? 0
       const hex = hexU32(val)
       const isOrange = props.kind === 'orange'
-      const isExc = props.kind === 'exc'
       const changed = props.changed
 
-      const valClass = isExc
+      const valClass = isOrange && changed
         ? 'text-orange-300 font-bold'
-        : isOrange && changed
-          ? 'text-orange-300 font-bold'
-          : changed
-            ? 'text-green-300 font-bold'
-            : 'text-gray-300'
+        : changed
+          ? 'text-green-300 font-bold'
+          : 'text-gray-300'
 
       const rowClass = [
         'flex justify-between items-center px-2 py-1 rounded',
@@ -98,10 +83,7 @@ const RegRow = defineComponent({
 
       return h('div', { class: rowClass }, [
         labelEl,
-        h('div', { class: 'flex items-center gap-1' }, [
-          isExc ? h('span', { class: 'text-orange-500 text-xs' }, 'EXC_RETURN') : null,
-          h('span', { class: valClass }, hex),
-        ]),
+        h('span', { class: valClass }, hex),
       ])
     }
   },

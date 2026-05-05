@@ -119,6 +119,55 @@ npm run type-check # TypeScript型チェック
 
 ## 絶対に守るルール
 
+### 0. コードコメントのルール
+
+#### インラインコメント
+
+WHY が非自明な箇所にのみ書く。コードを読めばわかる「何をしているか」は書かない。
+
+```typescript
+// ✅ 書くべきコメント（なぜ）
+// ARM の C フラグは「借りが発生しなかった」ときに 1 になる（x86 と逆）
+carry: isSub ? (a >>> 0) >= (b >>> 0) : result > 0xffffffff,
+
+// ❌ 書かなくてよいコメント（コードをなぞるだけ）
+// a と b を比較する
+carry: (a >>> 0) >= (b >>> 0),
+```
+
+#### 関数コメント（JSDoc 形式）
+
+関数には JSDoc 形式でコメントを書く。言語は日本語。
+
+ルール:
+- 1行目に「この関数が何を解決するか」の簡潔な概要（Summary）を書く
+- `@param name - 説明` の形式にする（TypeScript の型推論と重複するため `{string}` のような型指定は省略）
+- 複雑なロジックには `@example` を含める
+- 戻り値が自明でない場合は `@returns` を書く
+
+```typescript
+// ✅ 正しい JSDoc コメント
+/**
+ * Godbolt レスポンスをパースしてアセンブラテキストと行マッピングを生成する。
+ *
+ * @param response - Godbolt API のレスポンス JSON
+ * @param arch - ターゲットアーキテクチャ（ARM/x86 でコメント記号が異なる）
+ * @returns asmText（表示用）と cLineMap（アセンブラ行 → C ソース行の対応表）
+ *
+ * @example
+ * const { asmText, cLineMap } = adaptGodboltResponse(json, 'arm')
+ */
+function adaptGodboltResponse(response: GodboltResponse, arch: Arch) { ... }
+
+// ❌ 型指定を重複して書いている（不要）
+/**
+ * @param {GodboltResponse} response - レスポンス
+ * @param {string} arch - アーキテクチャ
+ */
+```
+
+---
+
 ### 0. コミットはユーザーが明示的に指示した時のみ行う
 
 実装・修正・ドキュメント更新が完了しても、**ユーザーが「コミットして」と指示するまでコミットしてはならない。**

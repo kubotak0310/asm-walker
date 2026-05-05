@@ -20,11 +20,30 @@ export interface CompilerOutput {
   gccOutput: string               // raw gcc stderr — always populated (errors + warnings)
 }
 
+/**
+ * ANSI エスケープシーケンスを文字列から除去する。
+ *
+ * Godbolt の stderr にはターミナルカラーコードが含まれるため、
+ * ユーザーに表示する前に取り除く必要がある。
+ *
+ * @param s - ANSI コードを含む可能性がある文字列
+ * @returns エスケープシーケンスを除去したプレーンテキスト
+ */
 function stripAnsi(s: string): string {
   // eslint-disable-next-line no-control-regex
   return s.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
 }
 
+/**
+ * Godbolt API レスポンスをパーサーが扱える形式に変換する。
+ *
+ * アセンブラ行テキストを結合して asmText を作り、
+ * 各行の C ソース行対応を cLineMap に格納する。
+ * コンパイル失敗時（code !== 0）は error フィールドに GCC の stderr を入れて返す。
+ *
+ * @param response - Godbolt Compiler Explorer API のレスポンスオブジェクト
+ * @returns パーサーに渡す CompilerOutput（失敗時は error フィールドが設定される）
+ */
 export function adaptGodboltResponse(response: GodboltResponse): CompilerOutput {
   const gccOutput = response.stderr?.map(e => stripAnsi(e.text)).join('\n').trim() ?? ''
 
@@ -44,7 +63,8 @@ export function adaptGodboltResponse(response: GodboltResponse): CompilerOutput 
     if (!item) continue
     lines.push(item.text)
     if (item.source?.line != null) {
-      cLineMap.set(i, item.source.line - 1)  // Godbolt is 1-based
+      // Godbolt のソース行は 1-based のため、0-based に変換して格納する
+      cLineMap.set(i, item.source.line - 1)
     }
   }
 

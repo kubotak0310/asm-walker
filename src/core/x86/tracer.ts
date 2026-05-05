@@ -16,6 +16,18 @@ export interface TraceResult {
 const BASE_PC = BASE_PC_X86
 const INSTR_SIZE = 4  // virtual instruction size (x86 is variable-length, but we use fixed for visualization)
 
+/**
+ * パース済みx86命令列を先頭から順に実行し、各ステップのスナップショットを収集して返す。
+ *
+ * CALL/RET を callStack で追跡し、RET 時に正しいリターン先インデックスへジャンプする。
+ * main から RET した時点で実行を終了する（callStack が空の RET = プログラム終端）。
+ *
+ * @param parseResult - x86 パーサーが返す命令列・ラベルマップ・ソース行の集合
+ * @param initialState - 実行開始時のマシン状態
+ * @param maxSteps - 無限ループ検出のための最大実行ステップ数（デフォルト 200）
+ * @param cLineMap - アセンブラ行インデックス → C ソース行番号のマップ（CSourcePanel 対応時に使用）
+ * @returns states（状態スナップショット列）・steps（ステップデータ列）・asmLines・エラー文字列を含む TraceResult
+ */
 export function traceX86(
   parseResult: X86ParseResult,
   initialState: MachineState,

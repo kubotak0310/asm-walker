@@ -41,6 +41,8 @@ const S_SUFFIX_BASES = new Set([
   'LSL','LSR','ASR','ROR','MUL','MLA','MLS',
 ])
 
+// FP/SL/IP は Compiler Explorer の GCC ARM 出力で頻出するエイリアス名。
+// 正規名（r11/r10/r12）に統一しないとインタープリタのレジスタ参照が壊れる。
 const REG_ALIASES: Record<string, string> = {
   SP: 'sp', R13: 'sp',
   LR: 'lr', R14: 'lr',
@@ -50,16 +52,44 @@ const REG_ALIASES: Record<string, string> = {
   IP: 'r12', R12: 'r12',
 }
 
+/**
+ * レジスタ名を小文字の正規名に統一する。
+ *
+ * FP/SL/IP などのエイリアスを r11/r10/r12 に変換し、
+ * インタープリタ側でレジスタ参照が壊れないようにする。
+ *
+ * @param raw - 正規化前のレジスタ名文字列（大文字・小文字どちらでも可）
+ * @returns 小文字の正規レジスタ名（例: `"FP"` → `"r11"`、`"R0"` → `"r0"`）
+ */
 export function normalizeReg(raw: string): string {
   const upper = raw.trim().toUpperCase()
   return REG_ALIASES[upper] ?? upper.toLowerCase()
 }
 
+/**
+ * 文字列が有効な ARM レジスタ名かどうかを返す。
+ *
+ * r0〜r12 の番号付きレジスタと、SP/LR/PC/FP/SL/IP などのエイリアスを受け付ける。
+ * オペランド判定で「レジスタかラベルか」を区別するために使う。
+ *
+ * @param s - 判定する文字列
+ * @returns レジスタ名として有効なら `true`
+ */
 function isRegStr(s: string): boolean {
   const upper = s.trim().toUpperCase()
   return upper in REG_ALIASES || /^R\d{1,2}$/.test(upper)
 }
 
+/**
+ * ARM の即値文字列を数値に変換する。
+ *
+ * ARM アセンブラでは `#4` のように `#` プレフィックスが付くが、
+ * GCC 出力では付かない場合もあるため、どちらも受け付ける。
+ * 16 進数（`0x` / `0X` プレフィックス）にも対応する。
+ *
+ * @param s - 即値文字列（例: `"#4"`、`"4"`、`"#0x20"`）
+ * @returns 変換後の整数値。解析失敗時は `0`
+ */
 function parseImmediate(s: string): number {
   const t = s.trim().replace(/^#/, '')
   if (/^-?0[xX]/.test(t)) return parseInt(t, 16)
@@ -67,6 +97,21 @@ function parseImmediate(s: string): number {
   return isNaN(n) ? 0 : n
 }
 
+/**
+ * ニーモニック文字列を基底命令・条件コード・S フラグに分解する。
+ *
+ * ARM 命令は `ADDS`（S フラグ付き）や `BEQ`（条件コード付き）のように
+ * 基底ニーモニックにサフィックスが結合した形で書かれる。
+ * この関数はそれを分解して正規化された 3 フィールドに変換する。
+ *
+ * @param word - ニーモニック文字列（大文字・小文字どちらでも可）
+ * @returns 分解結果
+ *
+ * @example
+ * parseMnemonic("ADDS")  // → { base: 'ADD', cond: 'AL', sFlag: true }
+ * parseMnemonic("BEQ")   // → { base: 'B',   cond: 'EQ', sFlag: false }
+ * parseMnemonic("MOV")   // → { base: 'MOV', cond: 'AL', sFlag: false }
+ */
 function parseMnemonic(word: string): { base: string; cond: string; sFlag: boolean } {
   const upper = word.toUpperCase()
 
@@ -86,6 +131,15 @@ function parseMnemonic(word: string): { base: string; cond: string; sFlag: boole
   return { base: upper, cond: 'AL', sFlag: false }
 }
 
+/**
+ * レジスタリストの中身文字列をレジスタ名の配列に展開する。
+ *
+ * `{r0-r3, lr}` のような PUSH/POP オペランドの `{}` 内の文字列を受け取り、
+ * `"r0-r3"` のような範囲指定も個別のレジスタ名に展開する。
+ *
+ * @param inner - `{}` を除いたレジスタリスト文字列（例: `"r0-r3, lr"`）
+ * @returns 正規化されたレジスタ名の配列（例: `["r0","r1","r2","r3","lr"]`）
+ */
 function parseReglist(inner: string): string[] {
   const regs: string[] = []
   for (const part of inner.split(',').map(s => s.trim())) {
@@ -101,7 +155,15 @@ function parseReglist(inner: string): string[] {
   return regs
 }
 
-// Split operand string by commas, respecting [] {} () nesting
+/**
+ * オペランド文字列をカンマで分割する。
+ *
+ * `[]`・`{}`・`()` のネストを考慮し、括弧内のカンマでは分割しない。
+ * これにより `[r0, #4]` や `{r0, r1}` が誤って分割されるのを防ぐ。
+ *
+ * @param s - 分割するオペランド文字列
+ * @returns 分割されたトークンの配列
+ */
 function splitByComma(s: string): string[] {
   const parts: string[] = []
   let depth = 0
@@ -120,6 +182,16 @@ function splitByComma(s: string): string[] {
   return parts
 }
 
+/**
+ * 単一オペランド文字列を Operand 型に変換する。
+ *
+ * レジスタ・即値・メモリ参照・レジスタリスト・ラベルの順に判定する。
+ * メモリ参照は pre-indexed（`[r0, #4]!`）と post-indexed（`[r0], #4`）の両形式に対応する。
+ * ラベルは Compiler Explorer 形式（`sum(int, int)` → `"SUM"`）も正規化する。
+ *
+ * @param s - 変換するオペランド文字列（例: `"r0"`、`"#4"`、`"[sp, #8]"`）
+ * @returns 変換後の Operand オブジェクト。解析不能な場合は `null`
+ */
 function parseOperandStr(s: string): Operand | null {
   const t = s.trim()
   if (!t) return null
@@ -169,6 +241,17 @@ function parseOperandStr(s: string): Operand | null {
   return null
 }
 
+/**
+ * ARM アセンブラテキスト全体を 2 パスでパースして ParseResult を返す。
+ *
+ * パス 1 でラベル名→命令インデックスのマップを構築し、
+ * パス 2 で各命令行をパースして ParsedInstruction の配列を生成する。
+ * GAS 形式（Compiler Explorer 出力: `square(int):` ラベル・`@` コメント）と
+ * 手書きアセンブラ（`;` コメント）の両方に対応する。
+ *
+ * @param text - パース対象の ARM アセンブラソース全文
+ * @returns パース結果（命令配列・ラベルマップ・ソース行・エラーリスト）
+ */
 export function parseARM(text: string): ParseResult {
   const sourceLines = text.split('\n')
   const errors: ParseError[] = []

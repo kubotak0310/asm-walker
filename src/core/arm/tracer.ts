@@ -15,6 +15,18 @@ export interface TraceResult {
 
 const BASE_PC = BASE_PC_ARM
 
+/**
+ * パース済みARM命令列を先頭から順に実行し、各ステップのスナップショットを収集して返す。
+ *
+ * 'main' ラベルが存在する場合はそこをエントリポイントとし、
+ * maxSteps を超えたら無限ループとして打ち切る。
+ *
+ * @param parseResult - ARM パーサーが返す命令列・ラベルマップ・ソース行の集合
+ * @param initialState - 実行開始時のマシン状態
+ * @param maxSteps - 無限ループ検出のための最大実行ステップ数（デフォルト 200）
+ * @param cLineMap - アセンブラ行インデックス → C ソース行番号のマップ（CSourcePanel 対応時に使用）
+ * @returns states（状態スナップショット列）・steps（ステップデータ列）・asmLines・エラー文字列を含む TraceResult
+ */
 export function traceProgram(
   parseResult: ParseResult,
   initialState: MachineState,

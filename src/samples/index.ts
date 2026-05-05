@@ -1,3 +1,6 @@
+// CCompilePanel のサンプル選択に使うCコードテンプレート定義。
+// コンパイルは都度 Godbolt API に投げるため、アセンブラはここには持たない。
+
 export interface SampleDef {
   id: string
   name: string

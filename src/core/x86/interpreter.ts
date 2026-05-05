@@ -21,19 +21,48 @@ const BASE_PC = BASE_PC_X86
 // but we use a fixed step for visualization purposes)
 const INSTR_SIZE = 4
 
+// rsp/rbp/rip は常にアドレス値を保持するため 16 進表示する
 const ADDR_REGS = new Set(['rsp', 'rbp', 'rip'])
 
+/**
+ * 数値を学習用の可読フォーマットに変換する。
+ *
+ * x86-64 コードは 0x400000 以上に配置されるため、それ以上の値はアドレスとみなして 16 進表示。
+ * 学習時に「これはアドレスか数値か」が見た目で分かるようにするための閾値。
+ *
+ * @param val - フォーマット対象の数値
+ * @returns 0x400000 未満なら 10 進数文字列、以上なら 16 進数文字列
+ */
 function fmtDec(val: number): string {
   const u = val >>> 0
   if (u >= 0x400000) return hexU32(u)
   return (val | 0).toString(10)
 }
 
+/**
+ * レジスタ名と現在値を "rax(42)" や "rsp(0x7ffef0)" 形式で組み合わせた文字列を返す。
+ *
+ * @param name - レジスタ名（例: "rax", "rsp"）
+ * @param val - レジスタの現在値
+ * @returns "レジスタ名(値)" 形式の文字列
+ */
 function fmtRV(name: string, val: number): string {
   const s = ADDR_REGS.has(name) ? hexU32(val >>> 0) : fmtDec(val)
   return `${name}(${s})`
 }
 
+/**
+ * "[rbp-4]=0x7ffef0" 形式のメモリアドレス式を生成する。
+ *
+ * base + index*scale + disp から実効アドレスを計算して表示する。
+ *
+ * @param base - ベースレジスタ名（例: "rbp"）
+ * @param index - インデックスレジスタ名
+ * @param scale - インデックスのスケール係数
+ * @param disp - ディスプレースメント（オフセット）
+ * @param state - 現在のマシン状態（レジスタ値の参照に使用）
+ * @returns "[式]=0xアドレス" 形式の文字列
+ */
 function fmtMA(base: string | undefined, index: string | undefined, scale: number | undefined, disp: number | undefined, state: MachineState): string {
   const baseVal = base ? (getRegVal(base, state)) : 0
   const indexVal = index ? (getRegVal(index, state)) : 0
@@ -47,6 +76,15 @@ function fmtMA(base: string | undefined, index: string | undefined, scale: numbe
   return `[${expr}]=${hexU32(addr)}`
 }
 
+/**
+ * レジスタ名から現在の値を取得する。
+ *
+ * rsp/rbp/rip は MachineState の専用フィールドを参照する。
+ *
+ * @param name - レジスタ名（例: "rax", "rsp", "rip"）
+ * @param state - 現在のマシン状態
+ * @returns レジスタの現在値（未定義のレジスタは 0）
+ */
 function getRegVal(name: string, state: MachineState): number {
   if (name === 'rsp') return state.sp
   if (name === 'rbp') return state.fp
@@ -54,6 +92,13 @@ function getRegVal(name: string, state: MachineState): number {
   return state.regs[name] ?? 0
 }
 
+/**
+ * メモリオペランドから実効アドレスを計算する（base + index*scale + disp）。
+ *
+ * @param op - メモリ型のオペランド（base/index/scale/disp フィールドを持つ）
+ * @param state - 現在のマシン状態（レジスタ値の参照に使用）
+ * @returns 符号なし 32bit に丸めた実効アドレス
+ */
 function getMemAddr(op: X86Operand & { type: 'mem' }, state: MachineState): number {
   const base = op.base ? getRegVal(op.base, state) : 0
   const index = op.index ? getRegVal(op.index, state) : 0
@@ -62,10 +107,26 @@ function getMemAddr(op: X86Operand & { type: 'mem' }, state: MachineState): numb
   return (base + index * scale + disp) >>> 0
 }
 
+/**
+ * 仮想スタックから指定アドレスの値を読む。
+ *
+ * 未書き込みアドレスは 0 を返す。
+ *
+ * @param addr - 読み取り対象のアドレス
+ * @param state - 現在のマシン状態（state.stack を参照）
+ * @returns アドレスに書き込まれた値。未書き込みの場合は 0
+ */
 function readMem(addr: number, state: MachineState): number {
   return state.stack[addr] ?? 0
 }
 
+/**
+ * オペランドから実際の数値を解決する（レジスタ値・即値・メモリ読み出し）。
+ *
+ * @param op - 解決対象のオペランド
+ * @param state - 現在のマシン状態
+ * @returns オペランドが表す数値
+ */
 function resolveOperandValue(op: X86Operand, state: MachineState): number {
   if (op.type === 'reg') return getRegVal(op.name, state)
   if (op.type === 'imm') return op.value
@@ -73,6 +134,15 @@ function resolveOperandValue(op: X86Operand, state: MachineState): number {
   return 0
 }
 
+/**
+ * レジスタ名と新しい値から StateUpdate の部分オブジェクトを生成する。
+ *
+ * rsp/rbp は専用フィールド、それ以外は regs オブジェクトに格納する。
+ *
+ * @param name - 更新対象のレジスタ名
+ * @param val - 新しいレジスタ値
+ * @returns applyUpdate に渡せる部分的な StateUpdate オブジェクト
+ */
 function regUpdate(name: string, val: number): StateUpdate {
   if (name === 'rsp') return { sp: val >>> 0 }
   if (name === 'rbp') return { fp: val >>> 0 }
@@ -86,6 +156,24 @@ interface Flags {
   overflow: boolean
 }
 
+/**
+ * 加減算・論理演算の結果から x86 EFLAGS を計算する。
+ *
+ * @param result - 演算結果の生の数値
+ * @param a - 第1オペランド（演算前の値）
+ * @param b - 第2オペランド（演算前の値）
+ * @param op - 演算種別
+ * @returns ZF/SF/CF/OF の真偽値を格納した Flags オブジェクト
+ *
+ * @example
+ * // ADD 演算: 0xffffffff + 1 → CF=1（符号なし桁あふれ）, OF=0
+ * calcFlags(0, 0xffffffff, 1, 'add')
+ * // => { zero: true, negative: false, carry: true, overflow: false }
+ *
+ * // SUB 演算: 3 - 5 → CF=1（借りが発生）, OF=0
+ * calcFlags(-2, 3, 5, 'sub')
+ * // => { zero: false, negative: true, carry: true, overflow: false }
+ */
 function calcFlags(result: number, a: number, b: number, op: 'add' | 'sub' | 'and' | 'or' | 'xor'): Flags {
   const r32 = result >>> 0
   const zero = r32 === 0
@@ -93,13 +181,17 @@ function calcFlags(result: number, a: number, b: number, op: 'add' | 'sub' | 'an
   let carry = false
   let overflow = false
   if (op === 'add') {
+    // 符号なし加算でラップアラウンドしたら CF=1
     carry = r32 < (a >>> 0)
+    // 符号付きオーバーフロー: 両オペランドが同符号で結果が異符号
     const signA = (a >>> 31) & 1
     const signB = (b >>> 31) & 1
     const signR = (r32 >>> 31) & 1
     overflow = signA === signB && signR !== signA
   } else if (op === 'sub') {
+    // 符号なし減算で借りが発生したら CF=1（x86 は ARM と定義が同じ方向）
     carry = (a >>> 0) < (b >>> 0)
+    // 符号付きオーバーフロー: オペランドが異符号で結果が a と異符号
     const signA = (a >>> 31) & 1
     const signB = (b >>> 31) & 1
     const signR = (r32 >>> 31) & 1
@@ -108,6 +200,13 @@ function calcFlags(result: number, a: number, b: number, op: 'add' | 'sub' | 'an
   return { zero, negative, carry, overflow }
 }
 
+/**
+ * x86 EFLAGS の条件コードが現在のフラグ状態で成立するかを返す（Intel SDM Vol.1 B.1 準拠）。
+ *
+ * @param cond - 条件コード文字列（例: "E", "NE", "L", "GE"）
+ * @param flags - 現在の EFLAGS 状態
+ * @returns 条件が成立する場合 true
+ */
 function evalCond(cond: string, flags: MachineState['flags']): boolean {
   const { zero: Z, negative: N, carry: C, overflow: V } = flags
   switch (cond) {
@@ -131,13 +230,32 @@ function evalCond(cond: string, flags: MachineState['flags']): boolean {
   }
 }
 
-// Extract condition suffix from mnemonic (e.g. 'JE' → 'E', 'SETL' → 'L')
+/**
+ * 条件付き命令のニーモニックから条件部分を抽出する（"JE" → "E"、"SETL" → "L"）。
+ *
+ * @param mnemonic - 命令のニーモニック文字列（例: "JE", "SETL"）
+ * @param prefix - 除去するプレフィックス（例: "J", "SET"）
+ * @returns プレフィックスを取り除いた条件コード文字列
+ */
 function getCondSuffix(mnemonic: string, prefix: string): string {
   return mnemonic.slice(prefix.length)
 }
 
 const FRAME_COLORS: Array<'purple' | 'green' | 'orange'> = ['purple', 'green', 'orange']
 
+/**
+ * 1命令を解釈して StateUpdate・説明文・次命令インデックスを返す。
+ *
+ * callDepth はフレーム色と phase の決定に使う。未対応命令は { error: string } を返す。
+ *
+ * @param instr - 実行対象の x86 命令オブジェクト
+ * @param instrIdx - 命令配列内のインデックス（PC 計算の基準）
+ * @param state - 実行前のマシン状態
+ * @param labels - ラベル名 → 命令インデックスのマップ（ジャンプ先解決に使用）
+ * @param instrCount - 命令配列の総数（番兵値として使用）
+ * @param callDepth - 現在のコールネスト深さ（0 = main 相当）
+ * @returns 正常時は X86InterpretResult、未対応命令時は { error: string }
+ */
 export function interpretX86(
   instr: X86Instruction,
   instrIdx: number,
@@ -153,7 +271,19 @@ export function interpretX86(
 
   const phase: Phase = callDepth === 0 ? 'main' : callDepth === 1 ? 'callee' : 'callee'
 
-  // Helper to build a standard result
+  /**
+   * 正常終了の X86InterpretResult を組み立てるヘルパー。
+   *
+   * pc を自動計算して update に追加する。
+   *
+   * @param update - 状態変化を表す部分的な StateUpdate
+   * @param explain - 命令の人間向け説明文
+   * @param effect - 状態変化の ← 記法による文字列
+   * @param comment - CodePanel のインライン表示用コメント
+   * @param nextInstrIdx - 次の命令インデックス（省略時は instrIdx + 1）
+   * @param extras - isPtr / isArr フラグ（省略可）
+   * @returns 組み立て済みの X86InterpretResult
+   */
   function ok(
     update: StateUpdate,
     explain: string,
@@ -348,6 +478,8 @@ export function interpretX86(
   }
 
   // ── CDQ / CQO ────────────────────────────────────────────────────────────
+  // IDIV は rdx:rax を被除数とする 64 bit 除算を行う。
+  // 除算の前に CDQ/CQO で rax の符号を rdx に拡張しておく必要がある。
   if (mnemonic === 'CDQ') {
     const rax = getRegVal('rax', state) | 0
     const rdx = rax < 0 ? 0xffffffff : 0
@@ -469,13 +601,14 @@ export function interpretX86(
     if (op0.type === 'label') {
       const target = labels.get(op0.name)
       if (target === undefined) return { error: `CALL: ラベル "${op0.name}" が見つかりません` }
+      // x86 ABI: CALL は戻りアドレス（= 次の命令の PC）をスタックに積んでからジャンプする。
+      // ARM の BL と違いハードウェアレジスタ（LR）は使わない。RET で [rsp] から戻る。
       const retAddr = nextPc
       const newSp = (state.sp - 8) >>> 0
       const effect = `rsp ← ${hexU32(newSp)}; [rsp] ← ${hexU32(retAddr)}, RIP ← ${op0.name}`
       const comment = `戻り先(${hexU32(retAddr)})をスタックに積んで ${op0.name.split('(')[0]} をコール`
-      // Determine frame color based on call depth
       const color = FRAME_COLORS[Math.min(callDepth + 1, 2)] ?? 'green'
-      // Try to extract simple function name (strip parameter types)
+      // Compiler Explorer は "add(int, int)" 形式でラベルを出力するため、括弧以降を除去する
       const funcName = op0.name.split('(')[0]?.toLowerCase() ?? op0.name.toLowerCase()
       const newFrames: StackFrame[] = [
         ...state.frames,

@@ -56,10 +56,28 @@ const SUBREG: Record<string, string> = {
   rip: 'rip',
 }
 
+/**
+ * サブレジスタ名を 64bit 正規名に統一する。
+ *
+ * x86-64 では同一物理レジスタに複数の幅別エイリアスが存在する（eax/ax/ah/al はすべて rax の一部）。
+ * シミュレーター内部では常に 64bit 名で保持することで幅別の分岐を排除する。
+ *
+ * @param s - 正規化対象のレジスタ名（大文字・小文字どちらでも可）
+ * @returns 64bit 正規名（例: "eax" → "rax"、"al" → "rax"）。未知の名前はそのまま小文字で返す
+ */
 function normalizeReg(s: string): string {
   return SUBREG[s.toLowerCase()] ?? s.toLowerCase()
 }
 
+/**
+ * 文字列が有効な x86-64 レジスタ名（サブレジスタ含む）かどうかを返す。
+ *
+ * SUBREG テーブルに含まれるすべてのエイリアス（eax/ax/ah/al 等）を有効と判定する。
+ * オペランド解析でレジスタと即値・ラベルを区別するために使う。
+ *
+ * @param s - 判定対象の文字列
+ * @returns レジスタ名として認識できる場合は true
+ */
 function isReg(s: string): boolean {
   return s.toLowerCase() in SUBREG
 }
@@ -71,7 +89,16 @@ const SIZE_QUALIFIERS: Record<string, 1 | 2 | 4 | 8> = {
   'QWORD PTR': 8,
 }
 
-// Lines to skip (assembler directives)
+/**
+ * GAS アセンブラディレクティブ行かどうかを判定する。
+ *
+ * `.cfi_*` / `.section` / `.globl` 等はリンカやデバッガ向けのメタ情報であり、
+ * 命令シミュレーションには不要なためパース対象から除外する。
+ * 空行・コメント行（`;` / `#`）も同様に不要としてスキップする。
+ *
+ * @param line - ソース行の生文字列
+ * @returns シミュレーション不要な行であれば true
+ */
 function isDirective(line: string): boolean {
   const t = line.trim()
   if (t === '') return true
@@ -94,7 +121,23 @@ function isDirective(line: string): boolean {
   return false
 }
 
-// Parse a single memory operand like "DWORD PTR [rbp-4]" or "[rax+rcx*4+8]"
+/**
+ * Intel 構文のメモリオペランド文字列を解析して `X86Operand` を返す。
+ *
+ * GCC が `-masm=intel` で出力するアドレッシングモード全般を扱う。
+ * サイズ修飾子（`BYTE/WORD/DWORD/QWORD PTR`）を先頭で剥がし、
+ * 続く `[...]` 内を `+`/`-` でトークン分割して base・index・scale・disp を抽出する。
+ *
+ * @param s - メモリオペランド文字列（例: `"DWORD PTR [rbp-4]"`、`"[rax+rcx*4+8]"`）
+ * @returns 解析成功時は `{ type: 'mem', ... }`、`[...]` を含まない場合は `null`
+ *
+ * @example
+ * parseMem('DWORD PTR [rbp-4]')
+ * // → { type: 'mem', size: 4, base: 'rbp', disp: -4 }
+ *
+ * parseMem('[rax+rcx*4+8]')
+ * // → { type: 'mem', size: 8, base: 'rax', index: 'rcx', scale: 4, disp: 8 }
+ */
 function parseMem(s: string): X86Operand | null {
   let size: 1 | 2 | 4 | 8 = 8
   let rest = s.trim()
@@ -174,6 +217,16 @@ function parseMem(s: string): X86Operand | null {
   return { type: 'mem', size, base, index, scale, disp }
 }
 
+/**
+ * 即値文字列を JavaScript の `number` に変換する。
+ *
+ * 16進数プレフィックス（`0x` / `0X`）があれば基数16、なければ基数10で解析する。
+ * 負符号（`-`）は呼び出し側が付与済みの場合と未付与の場合の両方を考慮し、
+ * 変換できない文字列は `null` で返して呼び出し側に判断を委ねる。
+ *
+ * @param s - 即値文字列（例: `"42"`、`"0xff"`）
+ * @returns 変換後の数値。非数値の場合は `null`
+ */
 function parseImm(s: string): number | null {
   const t = s.trim()
   if (t === '') return null
@@ -187,7 +240,16 @@ function parseImm(s: string): number | null {
   return isNaN(v) ? null : v
 }
 
-// Parse a single operand string (after splitting by comma, outside brackets)
+/**
+ * 単一オペランド文字列を `X86Operand` 型に変換する。
+ *
+ * メモリ参照 → レジスタ → 即値 → ラベルの順に判定する。
+ * この優先順位は Intel 構文の曖昧性を解消するために重要で、
+ * 例えば `DWORD PTR [rbp-4]` はサイズ修飾子があるため先頭で mem 判定できる。
+ *
+ * @param s - オペランド文字列（例: `"DWORD PTR [rbp-4]"`、`"rax"`、`"42"`、`"LABEL"`）
+ * @returns 解析成功時は `X86Operand`。空文字や認識不能な場合は `null`
+ */
 function parseOperand(s: string): X86Operand | null {
   const t = s.trim()
   if (!t) return null
@@ -230,7 +292,22 @@ function parseOperand(s: string): X86Operand | null {
   return null
 }
 
-// Split operand string by commas, respecting [...] brackets
+/**
+ * オペランド文字列を `[...]` のネストを考慮してカンマで分割する。
+ *
+ * 単純な `split(',')` では `[rbp-4]` 内部のカンマ（SIB 形式など将来のケース）を
+ * 誤って分割してしまうため、`[` / `]` の深さを追跡しながら分割する。
+ *
+ * @param s - カンマ区切りのオペランド文字列
+ * @returns 分割後のオペランド文字列配列
+ *
+ * @example
+ * splitOperands('DWORD PTR [rbp-4], rax')
+ * // → ['DWORD PTR [rbp-4]', 'rax']
+ *
+ * splitOperands('rdi, rsi, rdx')
+ * // → ['rdi', 'rsi', 'rdx']
+ */
 function splitOperands(s: string): string[] {
   const result: string[] = []
   let depth = 0
@@ -249,8 +326,17 @@ function splitOperands(s: string): string[] {
   return result
 }
 
-// Label detection: line ends with ':' (after stripping comments/whitespace)
-// Handles: "main:", "add(int, int):", ".L0:"
+/**
+ * ソース行からラベル名を抽出して大文字正規化した文字列を返す。
+ *
+ * 行末が `:` で終わる行をラベルと判定する。
+ * Compiler Explorer が出力する C++ 関数シグネチャ形式（例: `"add(int, int):"`）にも対応するため、
+ * 識別子として `. @ ( )` を含む文字列を許容している。
+ * ジャンプ先マップのキーとして大文字に正規化して返す。
+ *
+ * @param line - ソース行の生文字列
+ * @returns ラベル名（大文字）。ラベルでない行は `null`
+ */
 function extractLabel(line: string): string | null {
   const t = line.trim()
   // Remove inline comment
@@ -269,6 +355,18 @@ function extractLabel(line: string): string | null {
   return null
 }
 
+/**
+ * x86-64 Intel 構文アセンブラテキストをパースして `X86ParseResult` を返す。
+ *
+ * ラベルは命令インデックスを指す必要があるが、命令インデックスはディレクティブを除いた
+ * 行を数えないと確定できない。そのため3パス構成を採る:
+ * - パス1（仮収集）: ラベル位置を命令インデックスで仮記録しながら命令行を列挙
+ * - パス2（再解決）: 命令行インデックス配列が確定した状態でラベルを正確なインデックスに再マップ
+ * - パス3（構築）: 各命令行をニーモニック＋オペランドに分解して `X86Instruction` を生成
+ *
+ * @param asmText - GCC `-masm=intel` 出力などの x86-64 Intel 構文アセンブラテキスト
+ * @returns パース結果（命令配列・ラベルマップ・ソース行・エラー一覧）
+ */
 export function parseX86(asmText: string): X86ParseResult {
   const sourceLines = asmText.split('\n')
   const instructions: X86Instruction[] = []

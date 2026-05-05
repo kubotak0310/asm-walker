@@ -13,6 +13,8 @@ const INITIAL_STATE: MachineState = {
   regs: { r0: 0, r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, r6: 0, r7: 0, r8: 0, r9: 0, r10: 0, r11: 0, r12: 0 },
   sp: BASE_SP_ARM,
   fp: 0,
+  // 0x08000001 = ARM Flash 先頭 + Thumb ビット。main から BX LR したとき
+  // この値が命令インデックス範囲外になり、トレーサーが正常終了と判断する。
   lr: 0x08000001,
   pc: BASE_PC_ARM,
   stack: {},
@@ -35,6 +37,8 @@ const X86_INITIAL_STATE: MachineState = {
   frames: [{ name: 'main', lo: BASE_SP_X86, hi: BASE_SP_X86, color: 'purple' }],
 }
 
+// モジュールスコープのシングルトン: Vue の provide/inject や props を経由せず
+// 全コンポーネントが同じ状態を参照できる。ステップ移動・コンパイル結果がどこからでも読める。
 // ── Module-level state (singleton) ──────────────────────────────────────────
 const arch = ref<Arch>('arm')
 const currentStep = ref(0)
@@ -76,6 +80,21 @@ const showDiff = computed(() => false)
 
 // ── ARM ABI helpers ──────────────────────────────────────────────────────────
 
+/**
+ * Cソースを正規表現で解析し、指定した関数定義の引数個数を返す。
+ *
+ * RegisterPanel が「引数1」「引数2」バッジを何個表示するかを決めるために使う。
+ * 可変長引数・関数ポインタ引数は判定が難しいため null を返してバッジ非表示にする。
+ *
+ * @param funcName - 引数個数を調べたい関数の名前
+ * @param cCode - Cソースコードを行単位に分割した配列
+ * @returns 引数個数（void/引数なしは 0）。判定不能な場合は null
+ * @example
+ * parseArgCount('add', ['int add(int a, int b) {', '  return a + b;', '}'])
+ * // => 2
+ * parseArgCount('printf', ['printf("%d", x);'])
+ * // => null（可変長引数のため）
+ */
 function parseArgCount(funcName: string, cCode: string[]): number | null {
   const escaped = funcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const re = new RegExp(`\\b${escaped}\\s*\\(([^)]*)\\)`)
@@ -92,12 +111,29 @@ function parseArgCount(funcName: string, cCode: string[]): number | null {
   return null
 }
 
+/**
+ * 現在ステップのアセンブラ行テキストを小文字で返す。
+ *
+ * isReturnStep・callTarget の正規表現マッチに先立って呼び出す共通ヘルパー。
+ * テキストが存在しない場合は空文字を返す。
+ *
+ * @returns 現在ステップのアセンブラ命令テキスト（小文字・トリム済み）
+ */
 function asmLineText(): string {
   const step = currentStepData.value
   if (!step || step.asmLine < 0) return ''
   return (preset.value?.asmCode[step.asmLine]?.text ?? '').trim().toLowerCase()
 }
 
+/**
+ * 現在ステップが関数の return 命令かどうかを返す。
+ *
+ * CCompilePanel の「実行完了」バー表示のトリガーとして使う。
+ * ARM では `bx lr` / `pop {…, pc}` / `ldm …, {…, pc}` を、
+ * x86 では `ret` を return 命令と判定する。
+ *
+ * @returns 現在ステップが return 命令であれば true
+ */
 const isReturnStep = computed(() => {
   if (!currentStepData.value) return false
   const text = asmLineText()
@@ -109,36 +145,93 @@ const isReturnStep = computed(() => {
     || (text.startsWith('ldm') && text.includes('pc'))
 })
 
+/**
+ * 現在実行中の関数名を frames 配列の末尾エントリから取得する。
+ *
+ * CCompilePanel バーの「▶ funcName() 実行中」表示に使う。
+ * frames が空の場合は安全のため 'main' を返す。
+ *
+ * @returns 現在実行中の関数名
+ */
 const currentFuncName = computed(() => {
   const frames = currentState.value.frames
   return frames[frames.length - 1]?.name ?? 'main'
 })
 
+/**
+ * アーキテクチャに応じた戻り値レジスタ名を返す。
+ *
+ * ARM ABI では r0、x86-64 System V ABI では rax が戻り値レジスタ。
+ *
+ * @returns ARM なら 'r0'、x86 なら 'rax'
+ */
 const returnReg = computed(() => arch.value === 'x86' ? 'rax' : 'r0')
 
+/**
+ * 戻り値レジスタの現在値を返す。
+ *
+ * CCompilePanel の「実行完了 — r0 = X (N)」表示に使う。
+ * アーキテクチャに応じて rax（x86）または r0（ARM）を参照する。
+ *
+ * @returns 戻り値レジスタに格納された数値
+ */
 const returnVal = computed(() => {
   const regs = currentState.value.regs
   return arch.value === 'x86' ? (regs['rax'] ?? 0) : (regs['r0'] ?? 0)
 })
 
+/**
+ * 戻り値を 16 進数文字列で返す。
+ *
+ * CCompilePanel バーの「0xXXXXXXXX」形式の表示に使う。
+ *
+ * @returns 16 進数表現の文字列（例: '0x00000003'）
+ */
 const returnHex = computed(() => hexU32(returnVal.value))
+
+/**
+ * 戻り値を 10 進数文字列で返す。
+ *
+ * CCompilePanel バーの「(N)」形式の10進数表示に使う。
+ *
+ * @returns 10 進数表現の文字列（例: '3'）
+ */
 const returnDec = computed(() => returnVal.value.toString(10))
 
+/**
+ * 現在ステップが BL/CALL 命令の場合、呼び出し先の関数名を返す。
+ *
+ * レジスタ間接呼び出し（`blx r0`・`call [rax]` など）は関数名が取得できないため null を返す。
+ * callDisplay・callArgCount の基点となる computed。
+ *
+ * @returns 呼び出し先の関数名。BL/CALL でない場合やレジスタ間接呼び出しの場合は null
+ */
 const callTarget = computed<string | null>(() => {
   if (!currentStepData.value) return null
   const text = asmLineText()
   if (arch.value === 'x86') {
     const m = text.match(/^call\s+(\S+)/)
     if (!m || !m[1]) return null
+    // CALL [rax] や CALL QWORD PTR [...] のようなレジスタ間接呼び出しは
+    // 関数名が不明なためバッジ表示をスキップする
     if (m[1].includes('[') || m[1].includes('ptr')) return null
     return m[1].split('(')[0] ?? null
   }
   const m = text.match(/^blx?\s+(\w+)/)
   if (!m || !m[1]) return null
+  // BLX r0 のようなレジスタ間接呼び出し（関数ポインタ経由）は名前が取れないためスキップ
   if (/^(r\d+|sp|lr|pc|fp|ip|sl)$/.test(m[1])) return null
   return m[1]
 })
 
+/**
+ * 呼び出し先関数の引数個数を Cソース解析で取得する。
+ *
+ * RegisterPanel の「引数1」「引数2」バッジを何個表示するかの決定に使う。
+ * callTarget が null または Cソースが存在しない場合は null を返す。
+ *
+ * @returns 引数個数。判定不能または呼び出し命令でない場合は null
+ */
 const callArgCount = computed<number | null>(() => {
   const name = callTarget.value
   if (!name) return null
@@ -147,6 +240,15 @@ const callArgCount = computed<number | null>(() => {
   return parseArgCount(name, cCode)
 })
 
+/**
+ * CCompilePanel バーの「→ funcName(r0=val, r1=val) 呼び出し」表示用文字列を構築する。
+ *
+ * 引数個数が取得できない場合は `funcName()` のみを返す。
+ * 呼び出し命令でない場合は null を返す。
+ * 引数レジスタは ARM: r0〜r3、x86: rdi/rsi/rdx/rcx/r8/r9 の順で参照する。
+ *
+ * @returns 表示用の呼び出し文字列（例: 'add(r0=1, r1=2)'）。非呼び出しステップは null
+ */
 const callDisplay = computed<string | null>(() => {
   const name = callTarget.value
   if (!name) return null
@@ -160,10 +262,25 @@ const callDisplay = computed<string | null>(() => {
 })
 
 // ── Actions ──────────────────────────────────────────────────────────────────
+
+/**
+ * アーキテクチャを切り替える。
+ *
+ * CCompilePanel でコンパイラ選択時に呼ばれ、
+ * isReturnStep・callTarget・RegisterPanel バッジなど arch 依存の computed に連鎖する。
+ *
+ * @param newArch - 切り替え先のアーキテクチャ（'arm' または 'x86'）
+ */
 function setArch(newArch: Arch) {
   arch.value = newArch
 }
 
+/**
+ * 次のステップへ進む。
+ *
+ * preset が存在しない場合、または最終ステップに達している場合は何もしない。
+ * StepController の「▶」ボタンおよびキーボードの → キーから呼ばれる。
+ */
 function nextStep() {
   if (!preset.value) return
   if (currentStep.value < preset.value.steps.length) {
@@ -171,20 +288,50 @@ function nextStep() {
   }
 }
 
+/**
+ * 前のステップへ戻る。
+ *
+ * ステップ 0 より前には戻れない（ガード済み）。
+ * StepController の「◀」ボタンおよびキーボードの ← キーから呼ばれる。
+ */
 function prevStep() {
   if (currentStep.value > 0) {
     currentStep.value--
   }
 }
 
+/**
+ * ステップカウンタを 0 に戻し、プログラム開始直前の状態へリセットする。
+ *
+ * states 配列は破棄しない。currentStep を 0 に戻すだけで
+ * スナップショットの再計算コストなしに初期状態を表示できる。
+ */
 function reset() {
   currentStep.value = 0
 }
 
+/**
+ * レジスタ差分パネルの表示/非表示をトグルする。
+ *
+ * 現在は showDiff が `computed(() => false)` で固定されているため実質未使用。
+ * 将来的に差分パネルを復活させる際のフックとして残してある。
+ */
 function toggleDiff() {
   diffOpen.value = !diffOpen.value
 }
 
+/**
+ * Godbolt API にCソースを送信してコンパイルし、生成されたアセンブリをトレースする。
+ *
+ * ARM/x86 の判定はコンパイラ ID に 'arm' が含まれるかどうかで行い、
+ * パース・トレース結果を preset / states に格納する。
+ * エラー時（コンパイルエラー・パースエラー・ネットワークエラー）は
+ * compileError に文字列をセットして呼び出し元に通知する。
+ *
+ * @param cSource - コンパイルするCソースコード文字列
+ * @param compilerId - Godbolt コンパイラ ID（例: 'carm1121', 'cg142'）
+ * @param optLevel - GCC 最適化オプション文字列（例: '-O0', '-O1'）
+ */
 async function simulateCompiled(cSource: string, compilerId: string, optLevel: string) {
   isCompiling.value = true
   compileError.value = null
@@ -206,6 +353,8 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
       return
     }
 
+    // Godbolt のコンパイラ ID 命名規則に依存（例: "carm1121", "armug1320"）。
+    // x86 用コンパイラ（"cg142" 等）は 'arm' を含まないためこの判定が成立する。
     const isArm = compilerId.includes('arm')
     arch.value = isArm ? 'arm' : 'x86'
     const cSourceLines = cSource.split('\n')
@@ -255,6 +404,15 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
   }
 }
 
+/**
+ * モジュールシングルトンの状態と操作関数をまとめて返す Vue composable。
+ *
+ * モジュールスコープで状態を保持するため、全コンポーネントが同一インスタンスを参照する。
+ * provide/inject を使わずにグローバル状態を共有でき、
+ * ステップ移動・コンパイル結果がどのコンポーネントからでも読み書きできる。
+ *
+ * @returns シミュレーター状態（refs・computed）と操作関数のオブジェクト
+ */
 export function useSimulator() {
   return {
     arch,

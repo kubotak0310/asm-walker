@@ -17,34 +17,76 @@ export interface InterpretResult {
 }
 
 const BASE_PC = BASE_PC_ARM
+// 呼び出し深度に応じてフレームを色分けする（3色でローテーション）
 const FRAME_COLORS: Array<'purple' | 'green' | 'orange'> = ['purple', 'green', 'orange']
+// アドレス値を持つレジスタ — 数値ではなく 16 進表示する
 const ADDR_REGS = new Set(['sp', 'lr', 'pc', 'fp'])
 
+/**
+ * レジスタの種類に応じて値を適切な16進形式で表示する。
+ *
+ * @param regName - レジスタ名（'sp', 'lr', 'pc', 'fp' など）
+ * @param val - 表示する数値
+ * @returns アドレスレジスタは8桁16進（`0x20007ff0`）、それ以外は短縮16進（`0x3`）
+ */
 function fmtVal(regName: string, val: number): string {
   if (ADDR_REGS.has(regName)) return hexU32(val)
   return `0x${val.toString(16)}`
 }
 
-// Decimal for small values, hex for address-like values
+/**
+ * 数値を学習者にとって意味が分かりやすい形式で表示する。
+ *
+ * ARM SRAM 領域（0x0800_0000〜）以上はアドレス値とみなして 16 進表示。
+ * それ未満は符号付き 10 進数で表示する（学習時に値の意味が分かりやすいため）。
+ *
+ * @param val - 表示する数値
+ * @returns アドレス値は8桁16進、それ以外は符号付き10進数の文字列
+ */
 function fmtDec(val: number): string {
   const u = val >>> 0
   if (u >= 0x08000000) return hexU32(u)
   return (val | 0).toString(10)
 }
 
-// Format register with its current value: r0(3) or sp(0x20007ff0)
+/**
+ * レジスタ名と現在値を組み合わせた文字列を返す。
+ *
+ * コメント・effect 文字列の中で「どのレジスタが何の値を持っているか」を
+ * 一目で分かるように示すために使う。
+ *
+ * @param name - レジスタ名（'r0', 'sp' など）
+ * @param val - レジスタの現在値
+ * @returns `"r0(3)"` や `"sp(0x20007ff0)"` 形式の文字列
+ */
 function fmtRV(name: string, val: number): string {
   const s = ADDR_REGS.has(name) ? hexU32(val >>> 0) : fmtDec(val)
   return `${name}(${s})`
 }
 
-// Format memory address expression: [r7+4]=0x20007fec
+/**
+ * STR/LDR 命令のコメント用にメモリアドレス式の文字列を生成する。
+ *
+ * @param base - ベースレジスタ名（'r7', 'sp' など）
+ * @param offset - バイトオフセット（正・負・ゼロ）
+ * @param baseVal - ベースレジスタの現在値
+ * @returns `"[r7+4]=0x20007fec"` 形式の文字列。オフセットが 0 の場合は `"[sp]=0x20007ff0"`
+ */
 function fmtMA(base: string, offset: number, baseVal: number): string {
   const addr = (baseVal + offset) >>> 0
   const off = offset === 0 ? '' : offset > 0 ? `+${offset}` : `${offset}`
   return `[${base}${off}]=${hexU32(addr)}`
 }
 
+/**
+ * PUSH/POP のレジスタ処理順序を決めるための番号を返す。
+ *
+ * ARM 仕様では PUSH/POP はレジスタ番号の昇順にスタックへ格納・復元するため、
+ * ソートキーとして使う（r0=0, ..., r12=12, sp=13, lr=14, pc=15）。
+ *
+ * @param name - レジスタ名（'r0'〜'r12', 'sp', 'lr', 'pc'）
+ * @returns ソート用の番号（0〜15）
+ */
 function regOrder(name: string): number {
   if (name === 'pc') return 15
   if (name === 'lr') return 14
@@ -53,6 +95,14 @@ function regOrder(name: string): number {
   return m ? parseInt(m[1] ?? '0', 10) : 0
 }
 
+/**
+ * オペランドを ARM 仕様書準拠の表記文字列に変換する。
+ *
+ * ExplainPanel の syntax 欄に表示するために使う。
+ *
+ * @param op - パース済みオペランド（undefined の場合は `'?'` を返す）
+ * @returns `'R0'`、`'#4'`、`'[SP, #-8]!'`、`'{R0, R1, LR}'` などの表記文字列
+ */
 function opLabel(op: Operand | undefined): string {
   if (!op) return '?'
   if (op.type === 'reg') {
@@ -71,6 +121,19 @@ function opLabel(op: Operand | undefined): string {
   return ''
 }
 
+/**
+ * 1命令を解釈して StateUpdate・説明文・次命令インデックスを返す。
+ *
+ * 未対応命令やオペランドエラーの場合は `{ error: string }` を返す。
+ *
+ * @param instr - パース済み命令オブジェクト
+ * @param instrIdx - 命令配列内の現在インデックス
+ * @param state - 実行前のマシン状態スナップショット
+ * @param labels - ラベル名 → 命令インデックスのマップ
+ * @param instrCount - 全命令数（範囲チェックに使う）
+ * @param callDepth - 現在の呼び出し深度（フレーム色の決定と phase の判断に使う）
+ * @returns 実行結果（`InterpretResult`）またはエラー（`{ error: string }`）
+ */
 export function interpretInstruction(
   instr: ParsedInstruction,
   instrIdx: number,
@@ -85,6 +148,15 @@ export function interpretInstruction(
 
   // --- Helpers ---
 
+  /**
+   * レジスタ名から現在の値を取得する。
+   *
+   * sp/lr/pc は MachineState の専用フィールドを参照し、
+   * 汎用レジスタは regs オブジェクトを参照する。
+   *
+   * @param name - レジスタ名（'r0'〜'r12', 'sp', 'lr', 'pc'）
+   * @returns レジスタの現在値（未初期化の汎用レジスタは 0）
+   */
   function getReg(name: string): number {
     if (name === 'sp') return state.sp
     if (name === 'lr') return state.lr
@@ -92,6 +164,16 @@ export function interpretInstruction(
     return state.regs[name] ?? 0
   }
 
+  /**
+   * レジスタ名と新しい値から StateUpdate の部分オブジェクトを生成する。
+   *
+   * sp/lr/pc は StateUpdate の専用フィールドに格納し、
+   * 汎用レジスタは `regs` オブジェクトに格納する。
+   *
+   * @param name - 書き込み先レジスタ名
+   * @param value - 書き込む値
+   * @returns StateUpdate に spread できる部分オブジェクト
+   */
   function setRegUpdate(name: string, value: number): Partial<StateUpdate> {
     if (name === 'sp') return { sp: value }
     if (name === 'lr') return { lr: value }
@@ -99,6 +181,14 @@ export function interpretInstruction(
     return { regs: { [name]: value } }
   }
 
+  /**
+   * オペランドから実際の数値を解決する。
+   *
+   * レジスタ参照の場合はシフト演算（LSL/LSR/ASR/ROR）も適用してから返す。
+   *
+   * @param op - パース済みオペランド（undefined の場合は 0 を返す）
+   * @returns 解決済みの数値（符号なし32ビット）
+   */
   function resolveVal(op: Operand | undefined): number {
     if (!op) return 0
     if (op.type === 'reg') {
@@ -116,12 +206,26 @@ export function interpretInstruction(
     return 0
   }
 
+  /**
+   * 算術演算の結果から CPSR フラグを計算する。
+   *
+   * ARM の C フラグは減算時に「借りが発生しなかった（a >= b）」のとき 1 になる点に注意
+   * （x86 の CF とは逆の定義）。V フラグは両オペランドが同符号で結果が異符号のときに立つ。
+   *
+   * @param result - 演算結果（加算では 32 ビットをオーバーフローした値も可）
+   * @param a - 第1オペランド（符号なし32ビット）
+   * @param b - 第2オペランド（符号なし32ビット）
+   * @param isSub - 減算命令の場合 true（C フラグの計算方法が変わる）
+   * @returns N/Z/C/V フラグの部分オブジェクト
+   */
   function computeFlags(result: number, a: number, b: number, isSub: boolean): Partial<Flags> {
     const r32 = result >>> 0
     return {
       zero: r32 === 0,
       negative: (r32 >>> 31) !== 0,
+      // 減算の C フラグ: ARM は「借りが発生しなかった（a >= b）」のとき 1（x86 と逆）
       carry: isSub ? (a >>> 0) >= (b >>> 0) : result > 0xffffffff,
+      // V フラグ: 両オペランドが同符号で結果が異符号 = 符号付きオーバーフロー
       overflow: (() => {
         const as = (a >>> 31) !== 0
         const bs = isSub ? ((~b >>> 0) >>> 31) !== 0 : (b >>> 31) !== 0
@@ -131,6 +235,14 @@ export function interpretInstruction(
     }
   }
 
+  /**
+   * ARM 条件コードが現在のフラグ状態で成立するかを返す。
+   *
+   * ARM Architecture Reference Manual B1.1 に準拠した全条件コードに対応する。
+   *
+   * @param c - 条件コード文字列（'EQ', 'NE', 'LT', 'GT', 'AL' など）
+   * @returns 条件が成立する場合 true
+   */
   function checkCond(c: string): boolean {
     const f = state.flags
     switch (c) {
@@ -153,7 +265,15 @@ export function interpretInstruction(
     }
   }
 
-  // Update the topmost stack frame's lo bound (called when SP decreases)
+  /**
+   * SP が下がるたびに最上位フレームの lo を更新する。
+   *
+   * スタックは下方向に成長するため、lo = 現在の SP（フレーム下端）を追跡することで
+   * FrameViz がフレームサイズを正しく描画できる。
+   *
+   * @param newSp - 更新後の SP 値（フレームの新しい下端アドレス）
+   * @returns lo を更新した新しいフレーム配列（frames が空の場合は空配列）
+   */
   function updateTopFrame(newSp: number): StackFrame[] {
     if (state.frames.length === 0) return []
     const frames = [...state.frames]
@@ -497,6 +617,8 @@ export function interpretInstruction(
         metaRemove.push(sp)
         if (reg === 'pc') {
           retPhase = true
+          // スタックに積まれた LR 値（= 戻りアドレス）を命令インデックスに変換。
+          // 仮想 PC（BASE_PC + i*4）から i を逆算することでステップ配列を正しく辿れる。
           const ti = (val - BASE_PC) / 4
           nextIdx = Number.isInteger(ti) && ti >= 0 && ti < instrCount ? ti : instrCount
         } else if (reg === 'lr') {
@@ -551,9 +673,12 @@ export function interpretInstruction(
       if (labelOp?.type !== 'label') return { error: `BL: ラベルが必要: ${instr.raw}` }
       const target = labels.get(labelOp.name)
       if (target === undefined) return { error: `BL: 未定義ラベル: ${labelOp.name}` }
+      // ARM ABI: BL は次の命令アドレスを LR に保存してジャンプする。
+      // ハードウェアは自動的にスタックを触らないため、LR が戻りアドレスになる。
       const retAddr = BASE_PC + defaultNext * 4
       const targetAddr = BASE_PC + target * 4
       const newColor = FRAME_COLORS[(callDepth + 1) % FRAME_COLORS.length] ?? 'purple'
+      // フレームの lo/hi は最初 SP と同値にしておき、その後の PUSH で lo が更新される
       const newFrame: StackFrame = { name: labelOp.name, lo: state.sp, hi: state.sp, color: newColor }
       return {
         update: { lr: retAddr, frames: [...state.frames, newFrame], pc: targetAddr },

@@ -506,11 +506,26 @@ function handleCompare(
 function handleLoad(
   mnemonic: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  literalPool: Map<string, number>,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'LDR' && mnemonic !== 'LDRB' && mnemonic !== 'LDRH') return null
   const dst = operands[0]
   const src = operands[1]
   if (dst?.type !== 'reg') return { error: `LDR: レジスタが必要: ${raw}` }
+
+  // PC-relative literal pool load: `ldr r2, .L5` — GCC encodes constants > 8-bit this way
+  if (src?.type === 'label') {
+    const val = literalPool.get(src.name) ?? 0
+    const comment = `${dst.name} ← ${fmtDec(val)}（定数プール）`
+    return {
+      update: { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 },
+      explain: 'リテラルプールから定数をロード',
+      effect: comment,
+      comment,
+      phase, nextInstrIdx: defaultNext,
+    }
+  }
+
   if (src?.type !== 'mem') return { error: `LDR: メモリオペランドが必要: ${raw}` }
   const baseVal = getReg(src.base, state)
   const addr = src.postIndex !== undefined ? baseVal : baseVal + src.offset
@@ -777,6 +792,7 @@ export function interpretInstruction(
   instrIdx: number,
   state: MachineState,
   labels: Map<string, number>,
+  literalPool: Map<string, number>,
   instrCount: number,
   callDepth: number,
 ): InterpretResult | { error: string } {
@@ -794,7 +810,7 @@ export function interpretInstruction(
     handleBitwise(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
     handleShift(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
     handleCompare(mnemonic, operands, state, phase, defaultNext, raw) ??
-    handleLoad(mnemonic, operands, state, phase, defaultNext, raw) ??
+    handleLoad(mnemonic, operands, state, phase, defaultNext, raw, literalPool) ??
     handleStore(mnemonic, operands, state, phase, defaultNext, raw) ??
     handleStack(mnemonic, operands, state, phase, defaultNext, raw, instrCount) ??
     handleBranch(mnemonic, cond, operands, state, phase, defaultNext, raw, labels, instrCount, callDepth) ??

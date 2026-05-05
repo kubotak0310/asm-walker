@@ -33,7 +33,7 @@ export function traceProgram(
   maxSteps = 200,
   cLineMap?: Map<number, number>,
 ): TraceResult {
-  const { instructions, labels, sourceLines } = parseResult
+  const { instructions, labels, literalPool, sourceLines } = parseResult
   const instrCount = instructions.length
 
   // Build asmLines from source text (preserves all lines including blank/labels)
@@ -78,6 +78,7 @@ export function traceProgram(
       instrIdx,
       state,
       labels,
+      literalPool,
       instrCount,
       callStack.length,
     )

@@ -25,7 +25,8 @@ export interface ParseError {
 
 export interface ParseResult {
   instructions: ParsedInstruction[]
-  labels: Map<string, number>  // label name (uppercase) → instruction index
+  labels: Map<string, number>    // label name (uppercase) → instruction index
+  literalPool: Map<string, number>  // label name (uppercase) → .word value
   sourceLines: string[]
   errors: ParseError[]
 }
@@ -238,6 +239,7 @@ export function parseARM(text: string): ParseResult {
     | { kind: 'instr'; lineIndex: number; text: string }
 
   const items: LineItem[] = []
+  const literalPool = new Map<string, number>()
 
   for (let i = 0; i < sourceLines.length; i++) {
     const raw = sourceLines[i] ?? ''
@@ -251,6 +253,22 @@ export function parseARM(text: string): ParseResult {
     )
     const cleaned = (firstComment < Infinity ? raw.slice(0, firstComment) : raw).trim()
     if (!cleaned) continue
+
+    // .word directive: record numeric value into literalPool under the preceding label.
+    // GCC uses this for PC-relative literal pool loads: `ldr r2, .L5` / `.L5: .word 3`
+    const wordMatch = cleaned.match(/^\.word\s+(.+)/)
+    if (wordMatch) {
+      for (let j = items.length - 1; j >= 0; j--) {
+        const it = items[j]
+        if (!it) break
+        if (it.kind === 'label') {
+          literalPool.set(it.name, parseImmediate(wordMatch[1] ?? ''))
+          break
+        }
+        if (it.kind === 'instr') break
+      }
+      continue
+    }
 
     // Skip GAS assembler directives (start with '.', unless it's a local label like '.L0:')
     if (cleaned.startsWith('.') && !cleaned.match(/^\.[A-Za-z0-9_]+:/)) continue
@@ -319,5 +337,5 @@ export function parseARM(text: string): ParseResult {
     instructions.push({ lineIndex, raw: text, mnemonic: base, cond, sFlag, operands })
   }
 
-  return { instructions, labels, sourceLines, errors }
+  return { instructions, labels, literalPool, sourceLines, errors }
 }

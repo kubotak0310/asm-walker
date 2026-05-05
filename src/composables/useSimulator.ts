@@ -64,6 +64,19 @@ const currentStepData = computed(() => {
   return preset.value.steps[currentStep.value] ?? null
 })
 
+/**
+ * 直前に実行が完了したステップデータ（post-execution）。
+ *
+ * currentStepData が「次に実行する命令」であるのに対し、
+ * prevStepData は「今実行し終えた命令」を返す。
+ * ExplainPanel はこちらを使うことでアセンブラコメントと表示タイミングが一致する。
+ * step=0（未実行）のときは null を返す。
+ */
+const prevStepData = computed(() => {
+  if (!preset.value || currentStep.value === 0) return null
+  return preset.value.steps[currentStep.value - 1] ?? null
+})
+
 const totalSteps = computed(() => preset.value?.steps.length ?? 0)
 
 const displayPc = computed<number>(() => currentState.value.pc)
@@ -112,31 +125,30 @@ function parseArgCount(funcName: string, cCode: string[]): number | null {
 }
 
 /**
- * 現在ステップのアセンブラ行テキストを小文字で返す。
+ * 指定ステップデータのアセンブラ行テキストを小文字で返す。
  *
  * isReturnStep・callTarget の正規表現マッチに先立って呼び出す共通ヘルパー。
  * テキストが存在しない場合は空文字を返す。
  *
- * @returns 現在ステップのアセンブラ命令テキスト（小文字・トリム済み）
+ * @returns アセンブラ命令テキスト（小文字・トリム済み）
  */
-function asmLineText(): string {
-  const step = currentStepData.value
+function asmLineTextOf(step: typeof currentStepData.value): string {
   if (!step || step.asmLine < 0) return ''
   return (preset.value?.asmCode[step.asmLine]?.text ?? '').trim().toLowerCase()
 }
 
 /**
- * 現在ステップが関数の return 命令かどうかを返す。
+ * 直前に実行した命令が関数の return 命令かどうかを返す（post-execution 判定）。
  *
- * CCompilePanel の「実行完了」バー表示のトリガーとして使う。
+ * prevStepData ベースにすることで、return 実行後に「実行完了」バーが表示される。
  * ARM では `bx lr` / `pop {…, pc}` / `ldm …, {…, pc}` を、
  * x86 では `ret` を return 命令と判定する。
  *
- * @returns 現在ステップが return 命令であれば true
+ * @returns 直前のステップが return 命令であれば true
  */
 const isReturnStep = computed(() => {
-  if (!currentStepData.value) return false
-  const text = asmLineText()
+  if (!prevStepData.value) return false
+  const text = asmLineTextOf(prevStepData.value)
   if (arch.value === 'x86') {
     return text === 'ret' || text.startsWith('ret ')
   }
@@ -208,7 +220,7 @@ const returnDec = computed(() => returnVal.value.toString(10))
  */
 const callTarget = computed<string | null>(() => {
   if (!currentStepData.value) return null
-  const text = asmLineText()
+  const text = asmLineTextOf(currentStepData.value)
   if (arch.value === 'x86') {
     const m = text.match(/^call\s+(\S+)/)
     if (!m || !m[1]) return null
@@ -459,6 +471,7 @@ export function useSimulator() {
     currentState,
     prevState,
     currentStepData,
+    prevStepData,
     totalSteps,
     isFirst,
     isLast,

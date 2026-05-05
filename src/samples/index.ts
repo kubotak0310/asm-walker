@@ -9,6 +9,26 @@ export interface SampleDef {
 
 export const SAMPLES: SampleDef[] = [
   {
+    id: 'stackFrame',
+    name: 'スタックフレーム',
+    cCode: `int funcB(int p) {
+  int q = p * 2;
+  return q;
+}
+
+int funcA(int a, int b) {
+  int result = funcB(a + b);
+  return result;
+}
+
+int main() {
+  int x = 10;
+  int y = 20;
+  int z = funcA(x, y);
+  return z;
+}`,
+  },
+  {
     id: 'funcCall',
     name: '関数呼び出し',
     cCode: `int add(int a, int b) {

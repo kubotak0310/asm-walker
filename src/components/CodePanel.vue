@@ -112,7 +112,7 @@ const lineCommentMap = computed(() => {
   // phase → 現在の呼び出しで書き込んだ asmLine の集合
   const phaseActiveLines = new Map<string, Set<number>>()
 
-  for (let i = 0; i < currentStep.value; i++) {
+  for (let i = 0; i <= currentStep.value; i++) {
     const step = steps[i]
     if (!step || step.asmLine < 0) continue
     const phase = step.phase ?? ''

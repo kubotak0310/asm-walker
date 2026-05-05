@@ -68,6 +68,19 @@ int main() {
 }`,
   },
   {
+    id: 'pointerPass',
+    name: 'ポインタ渡し',
+    cCode: `void double_it(int *p) {
+  *p = *p * 2;
+}
+
+int main() {
+  int x = 5;
+  double_it(&x);
+  return x;
+}`,
+  },
+  {
     id: 'pointer',
     name: 'ポインタとアドレス',
     cCode: `int main() {

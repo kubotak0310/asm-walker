@@ -190,17 +190,12 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
   compileError.value = null
   gccOutput.value = ''
   try {
-    const isDev = import.meta.env.DEV
     const res = await fetch(
-      isDev
-        ? `https://godbolt.org/api/compiler/${compilerId}/compile`
-        : '/api/compile',
+      `https://godbolt.org/api/compiler/${compilerId}/compile`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: isDev
-          ? JSON.stringify({ source: cSource, options: { userArguments: optLevel } })
-          : JSON.stringify({ compilerId, source: cSource, options: { userArguments: optLevel } }),
+        body: JSON.stringify({ source: cSource, options: { userArguments: optLevel } }),
       },
     )
     const data = await res.json() as GodboltResponse

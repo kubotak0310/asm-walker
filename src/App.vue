@@ -57,12 +57,12 @@
       <!-- C compile editor -->
       <CCompilePanel />
 
-      <!-- Top: C source (4/12) + Assembly (8/12) -->
+      <!-- Top: C source (5/12) + Assembly (7/12) -->
       <div class="grid grid-cols-12 gap-3">
-        <div v-if="showCSource" class="col-span-12 lg:col-span-4">
+        <div v-if="showCSource" class="col-span-12 lg:col-span-5">
           <CSourcePanel />
         </div>
-        <div :class="showCSource ? 'col-span-12 lg:col-span-8' : 'col-span-12'">
+        <div :class="showCSource ? 'col-span-12 lg:col-span-7' : 'col-span-12'">
           <CodePanel />
         </div>
       </div>

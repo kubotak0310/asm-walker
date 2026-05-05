@@ -12,7 +12,7 @@
             : 'text-gray-300'
         ]"
       >
-        <span class="text-gray-600 select-none mr-3 text-xs">{{ i + 1 }}</span>{{ line || ' ' }}
+        <span class="text-gray-600 select-none mr-3 text-xs inline-block w-7 text-right">{{ i + 1 }}</span>{{ line || ' ' }}
       </div>
     </div>
   </div>

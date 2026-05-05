@@ -13,8 +13,12 @@ export interface InterpretResult {
   comment: string   // concise inline annotation for CodePanel
   phase: Phase
   isArr?: boolean
+  ptrReg?: string
   nextInstrIdx: number
 }
+
+// フレームポインタ・スタックポインタを base に使う [] はポインタ参照ではなくローカル変数アクセス
+const FRAME_REGS_ARM = new Set(['sp', 'fp', 'r7', 'r11'])
 
 const BASE_PC = BASE_PC_ARM
 // アドレス値を持つレジスタ — 数値ではなく 16 進表示する
@@ -523,6 +527,7 @@ function handleLoad(
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
+    ptrReg: FRAME_REGS_ARM.has(src.base) ? undefined : src.base,
   }
 }
 
@@ -554,6 +559,7 @@ function handleStore(
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
+    ptrReg: FRAME_REGS_ARM.has(dst.base) ? undefined : dst.base,
   }
 }
 

@@ -86,7 +86,7 @@ export function traceProgram(
       return { states, steps, asmLines, error: `行${instr.lineIndex + 1}: ${result.error}` }
     }
 
-    const { update, explain, effect, comment, phase, isArr, nextInstrIdx } = result
+    const { update, explain, effect, comment, phase, isArr, ptrReg, nextInstrIdx } = result
 
     // Finalize PC: already set in update by interpreter
     const nextState = applyUpdate(state, update)
@@ -100,6 +100,7 @@ export function traceProgram(
       effect,
       comment,
       isArr,
+      ptrReg,
       update,
     })
 

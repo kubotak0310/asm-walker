@@ -13,8 +13,12 @@ export interface X86InterpretResult {
   comment: string
   phase: Phase
   isArr?: boolean
+  ptrReg?: string
   nextInstrIdx: number
 }
+
+// フレームポインタ・スタックポインタを base に使う [] はポインタ参照ではなくローカル変数アクセス
+const FRAME_REGS_X86 = new Set(['rsp', 'rbp'])
 
 const BASE_PC = BASE_PC_X86
 // x86-64 は可変長命令だが、シミュレーター内部では VIRTUAL_INSTR_SIZE（4byte）に統一して PC を管理する
@@ -221,7 +225,7 @@ function makeResult(
   effect: string,
   comment: string,
   nextInstrIdx: number = ctx.nextDefault,
-  extras: { isArr?: boolean } = {},
+  extras: { isArr?: boolean; ptrReg?: string } = {},
 ): X86InterpretResult {
   return {
     update: { ...update, pc: BASE_PC + nextInstrIdx * INSTR_SIZE },
@@ -251,16 +255,19 @@ function handleMovGroup(
         : op1.type === 'mem' ? `${fmtMA(op1.base, op1.index, op1.scale, op1.disp, state)}(${valStr})`
         : String(val)
       const comment = `${op0.name} ← ${src}`
-      return makeResult(ctx, regUpdate(op0.name, val), `${op0.name} にデータを転送`, comment, comment)
+      const ptrReg = op1.type === 'mem' && op1.base && !FRAME_REGS_X86.has(op1.base) ? op1.base : undefined
+      return makeResult(ctx, regUpdate(op0.name, val), `${op0.name} にデータを転送`, comment, comment,
+        ctx.nextDefault, { ptrReg })
     }
     if (op0.type === 'mem') {
       const addr = getMemAddr(op0, state)
       const memStr = fmtMA(op0.base, op0.index, op0.scale, op0.disp, state)
       const src = op1.type === 'reg' ? fmtRV(op1.name, val) : op1.type === 'imm' ? String(val) : String(val)
       const comment = `${memStr} ← ${src}`
+      const ptrReg = op0.base && !FRAME_REGS_X86.has(op0.base) ? op0.base : undefined
       return makeResult(ctx,
         { stackSet: { [addr]: val >>> 0 } },
-        `メモリにデータを書き込み`, comment, comment,
+        `メモリにデータを書き込み`, comment, comment, ctx.nextDefault, { ptrReg },
       )
     }
     return { error: `MOV: 不正なオペランド` }

@@ -86,7 +86,7 @@ export function traceX86(
       return { states, steps, asmLines, error: `行${instr.lineIndex + 1}: ${result.error}` }
     }
 
-    const { update, explain, effect, comment, phase, isArr, nextInstrIdx } = result
+    const { update, explain, effect, comment, phase, isArr, ptrReg, nextInstrIdx } = result
 
     // For RET returning to a caller, override update.pc with the real return address so
     // CodePanel's stepAddrMap assigns the correct virtual address to the instruction after CALL.
@@ -108,6 +108,7 @@ export function traceX86(
       effect,
       comment,
       isArr,
+      ptrReg,
       update: fixedUpdate,
     })
 

@@ -64,6 +64,7 @@ export interface StepData {
   effect: string
   comment?: string  // concise inline annotation for CodePanel (separate from explain)
   isArr?: boolean
+  ptrReg?: string  // base register used inside [] — shown as ptr badge in RegisterPanel
   update: StateUpdate
 }
 

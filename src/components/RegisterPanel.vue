@@ -7,7 +7,7 @@
         :key="reg.name"
         :class="[
           'flex justify-between px-2 py-1 rounded transition-colors',
-          cellClass(reg.name, reg.value)
+          cellClass(reg.name)
         ]"
       >
         <span :class="labelClass(reg.name)">
@@ -20,8 +20,12 @@
             v-else-if="argBadgeIndex(reg.name) !== null"
             class="ml-1 bg-blue-700/70 text-blue-200 px-1 rounded text-xs align-middle"
           >引数{{ argBadgeIndex(reg.name)! + 1 }}</span>
+          <span
+            v-else-if="currentStepData?.ptrReg === reg.name"
+            class="ml-1 bg-purple-700/70 text-purple-200 px-1 rounded text-xs align-middle"
+          >ptr</span>
         </span>
-        <span :class="valueClass(reg.name, reg.value)">{{ hexU32(reg.value) }}</span>
+        <span :class="valueClass(reg.name)">{{ hexU32(reg.value) }}</span>
       </div>
     </div>
   </div>
@@ -30,10 +34,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
-import { isAddressLike, hexU32 } from '@/core/simulator'
-import type { Arch } from '@/core/types'
+import { hexU32 } from '@/core/simulator'
 
-const { arch, currentState, prevState, isReturnStep, returnReg, callArgCount } = useSimulator()
+const { arch, currentState, prevState, currentStepData, isReturnStep, returnReg, callArgCount } = useSimulator()
 
 const x86Regs = ['rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15']
 const armRegs = ['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
@@ -63,24 +66,26 @@ function changed(name: string): boolean {
   return (prevState.value.regs[name] ?? 0) !== (currentState.value.regs[name] ?? 0)
 }
 
-function cellClass(name: string, val: number): string {
+function cellClass(name: string): string {
   if (isReturnStep.value && name === returnReg.value) return 'bg-yellow-900/40 ring-1 ring-yellow-600/50'
   if (argBadgeIndex(name) !== null) return 'bg-blue-900/30 ring-1 ring-blue-600/40'
-  if (changed(name)) return isAddressLike(val, arch.value as Arch) ? 'bg-purple-900/40' : 'bg-green-900/40'
+  if (currentStepData.value?.ptrReg === name) return 'bg-purple-900/40 ring-1 ring-purple-600/40'
+  if (changed(name)) return 'bg-green-900/40'
   return ''
 }
 
 function labelClass(name: string): string {
   if (isReturnStep.value && name === returnReg.value) return 'text-yellow-300 font-bold'
   if (argBadgeIndex(name) !== null) return 'text-blue-300 font-bold'
+  if (currentStepData.value?.ptrReg === name) return 'text-purple-300 font-bold'
   return changed(name) ? 'text-white font-bold' : 'text-gray-300'
 }
 
-function valueClass(name: string, val: number): string {
+function valueClass(name: string): string {
   if (isReturnStep.value && name === returnReg.value) return 'text-yellow-200 font-bold'
   if (argBadgeIndex(name) !== null) return 'text-blue-200 font-bold'
-  if (changed(name)) return isAddressLike(val, arch.value as Arch) ? 'text-purple-300 font-bold' : 'text-green-300 font-bold'
-  if (isAddressLike(val, arch.value as Arch)) return 'text-purple-400'
+  if (currentStepData.value?.ptrReg === name) return 'text-purple-200 font-bold'
+  if (changed(name)) return 'text-green-300 font-bold'
   return 'text-gray-300'
 }
 

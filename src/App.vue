@@ -4,7 +4,7 @@
       <!-- Header -->
       <div class="flex items-center gap-3">
         <h1 class="text-white font-bold text-lg shrink-0">AsmWalker</h1>
-        <span class="text-gray-600 text-xs">ARM Cortex-M / x86-64 アセンブラ学習ツール</span>
+        <span class="text-gray-500 text-xs">ARM Cortex-M / x86-64 アセンブラ学習ツール</span>
         <div class="ml-auto flex items-center gap-3 text-sm">
           <!-- Guide dropdown -->
           <div class="relative group">

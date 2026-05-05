@@ -28,19 +28,6 @@
         </div>
       </TransitionGroup>
 
-      <!-- Stack usage bar -->
-      <div v-if="frames.length > 0" class="pt-2 border-t border-gray-700">
-        <div class="flex justify-between text-xs text-gray-400 mb-1">
-          <span>スタック使用量</span>
-          <span>{{ totalUsage }} bytes</span>
-        </div>
-        <div class="h-2 bg-gray-700 rounded overflow-hidden">
-          <div
-            class="h-full bg-blue-600 transition-all duration-300"
-            :style="{ width: `${Math.min(usagePct, 100)}%` }"
-          />
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -48,15 +35,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
-import { BASE_SP_X86, BASE_SP_ARM } from '@/core/types'
 import type { StackFrame } from '@/core/types'
 
-const { arch, currentState } = useSimulator()
+const { currentState } = useSimulator()
 
 const frames = computed(() => currentState.value.frames)
 const reversedFrames = computed(() => [...frames.value].reverse())
-
-const baseAddr = computed(() => arch.value === 'x86' ? BASE_SP_X86 : BASE_SP_ARM)
 
 function isCurrentFrame(frame: StackFrame): boolean {
   return frames.value[frames.value.length - 1]?.name === frame.name
@@ -74,14 +58,6 @@ function frameClass(frame: StackFrame): string {
 function frameSize(frame: StackFrame): number {
   return frame.hi - frame.lo
 }
-
-const totalUsage = computed(() => {
-  if (frames.value.length === 0) return 0
-  const lo = Math.min(...frames.value.map(f => f.lo))
-  return baseAddr.value - lo
-})
-
-const usagePct = computed(() => (totalUsage.value / 512) * 100)
 
 function hex(v: number): string {
   return `0x${v.toString(16).toUpperCase()}`

@@ -48,7 +48,7 @@
         <span v-if="step.isArr" class="text-xs bg-green-800 text-green-200 px-1.5 py-0.5 rounded">配列要素</span>
       </div>
       <p class="text-gray-200 text-sm pl-2">
-        <span v-if="step.fullName" class="text-blue-400 font-mono font-bold tracking-widest uppercase">{{ step.fullName }}</span>
+        <span v-if="step.fullName" class="text-blue-400 font-bold tracking-wide">{{ step.fullName }}</span>
         <span v-if="step.fullName" class="text-gray-500"> : </span>
         {{ step.explain }}
       </p>

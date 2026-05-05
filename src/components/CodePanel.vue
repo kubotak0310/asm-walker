@@ -70,9 +70,9 @@
               {{ line.text.trim() }}
             </span>
             <span
-              v-if="line.comment && !unreachableInfo.lines.has(i)"
+              v-if="lineCommentMap.get(i) && !unreachableInfo.lines.has(i)"
               class="text-gray-400 truncate"
-            >; {{ line.comment }}</span>
+            >; {{ lineCommentMap.get(i) }}</span>
           </template>
         </div>
 
@@ -95,11 +95,44 @@ import { BASE_PC_ARM } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
 import type { AsmLine, Phase } from '@/core/types'
 
-const { preset, currentStepData } = useSimulator()
+const { preset, currentStepData, currentStep } = useSimulator()
 
 const asmCodeEl = ref<HTMLElement | null>(null)
 const activeAsmLine = computed(() => currentStepData.value?.asmLine ?? -1)
 const isHW = computed(() => currentStepData.value?.type === 'hw')
+
+// 各行の「最後に実行された時点のコメント」を保持するマップ。
+// 関数の再呼び出し（同じエントリ asmLine に2回目に到達）を検出したとき、
+// その関数のコメントをすべて消去してから再積み上げる。
+const lineCommentMap = computed(() => {
+  const map = new Map<number, string>()
+  const steps = preset.value?.steps ?? []
+  // phase → 最初に到達した asmLine（関数エントリポイント）
+  const phaseEntryLine = new Map<string, number>()
+  // phase → 現在の呼び出しで書き込んだ asmLine の集合
+  const phaseActiveLines = new Map<string, Set<number>>()
+
+  for (let i = 0; i < currentStep.value; i++) {
+    const step = steps[i]
+    if (!step || step.asmLine < 0) continue
+    const phase = step.phase ?? ''
+    if (!phaseActiveLines.has(phase)) phaseActiveLines.set(phase, new Set())
+
+    if (!phaseEntryLine.has(phase)) {
+      phaseEntryLine.set(phase, step.asmLine)
+    } else if (phaseEntryLine.get(phase) === step.asmLine && phaseActiveLines.get(phase)!.size > 0) {
+      // 同じエントリポイントに再到達 = 新しい呼び出し → 前回分を全消去
+      for (const line of phaseActiveLines.get(phase)!) map.delete(line)
+      phaseActiveLines.get(phase)!.clear()
+    }
+
+    if (step.comment) {
+      map.set(step.asmLine, step.comment)
+      phaseActiveLines.get(phase)!.add(step.asmLine)
+    }
+  }
+  return map
+})
 
 // テンプレートの複合条件式をscript側に集約
 const pcDisplay = computed(() => {
@@ -214,11 +247,7 @@ let copyTimer: ReturnType<typeof setTimeout> | null = null
 
 function copyAsm() {
   const lines = preset.value?.asmCode ?? []
-  const text = lines.map(line => {
-    if (!line.text.trim()) return ''
-    const comment = line.comment ? `  ; ${line.comment}` : ''
-    return `${line.text}${comment}`
-  }).join('\n').trim()
+  const text = lines.map(line => line.text).join('\n').trim()
   navigator.clipboard.writeText(text)
   copied.value = true
   if (copyTimer) clearTimeout(copyTimer)

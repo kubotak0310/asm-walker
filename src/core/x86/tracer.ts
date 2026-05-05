@@ -145,17 +145,7 @@ export function traceX86(
     }
   }
 
-  // Annotate each executed line with its first-visit comment for inline display in CodePanel
-  const annotated = new Set<number>()
-  for (const step of steps) {
-    if (step.asmLine >= 0 && !annotated.has(step.asmLine)) {
-      const line = asmLines[step.asmLine]
-      if (line && !line.isHeader) {
-        line.comment = step.comment ?? step.explain
-        annotated.add(step.asmLine)
-      }
-    }
-  }
+
 
   return { states, steps, asmLines }
 }

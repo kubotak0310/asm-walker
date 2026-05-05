@@ -72,7 +72,6 @@ export interface AsmLine {
   text: string
   isHeader?: boolean  // ラベル行・コメント行・空行は命令ではないため true にしてハイライト対象外にする
   phase?: Phase
-  comment?: string  // auto-generated from tracer explain (free input / compile mode)
 }
 
 export interface PresetData {

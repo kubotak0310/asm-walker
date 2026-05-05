@@ -56,6 +56,21 @@ int main() {
 }`,
   },
   {
+    id: 'loop',
+    name: 'ループ',
+    cCode: `int sum_to(int n) {
+  int sum = 0;
+  for (int i = 1; i <= n; i++) {
+    sum += i;
+  }
+  return sum;
+}
+
+int main() {
+  return sum_to(5);
+}`,
+  },
+  {
     id: 'pointerPass',
     name: 'ポインタ渡し',
     cCode: `void double_it(int *p) {

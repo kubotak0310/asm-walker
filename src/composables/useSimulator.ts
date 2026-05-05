@@ -110,7 +110,7 @@ const showDiff = computed(() => false)
  */
 function parseArgCount(funcName: string, cCode: string[]): number | null {
   const escaped = funcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`\\b${escaped}\\s*\\(([^)]*)\\)`)
+  const re = new RegExp(`\\b${escaped}\\s*\\(([^)]*)\\)`, 'i')
   for (const line of cCode) {
     const m = re.exec(line)
     if (!m || m[1] === undefined) continue

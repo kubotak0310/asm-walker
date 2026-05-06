@@ -4,6 +4,8 @@ C言語とアセンブラの対応を、1命令ずつ確認しながら学べる
 
 👉 **https://asm-walker.vercel.app**
 
+📝 **[紹介記事（Zenn）](https://zenn.dev/kubotak0630/articles/480e2ef8322e6c)**
+
 ---
 
 ## できること

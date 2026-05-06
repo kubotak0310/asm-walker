@@ -38,7 +38,7 @@
 ### フェーズ3で完成した機能
 - Cコンパイルモード（`CCompilePanel.vue`）— CodeMirror 6 Cエディタ + Godbolt API経由コンパイル + ARM ステップ実行
 - 対応コンパイラ: `carm1121`（ARM GCC 11.2.1）・`armug1320`（13.2.0）・`armug1430`（14.3.0）・`x86-64g1420`（x86-64）
-- Vercel Serverless Function による CORS プロキシ（`api/compile.ts`）
+- Godbolt API は CORS 許可済みのためブラウザから直接呼び出し（プロキシ不要）
 - Godbolt レスポンスアダプター（`src/core/compiler.ts`）— asmText 生成・cLineMap（アセンブラ行↔Cソース行マッピング）
 - ARMパーサー強化: fp/sl/ip レジスタエイリアス・シフト付きオペランド（`r1, lsl #2`）・pre/post-indexed（`[r0]!`・`[r0], #4`）
 - x86コンパイルモード: アセンブリ表示のみ（ステップ実行なし）
@@ -78,7 +78,7 @@
 
 ### UI・品質改善（2026-05）で完了した機能
 - `CCompilePanel.vue`: コンパイラセレクタを arch 別に切り替え（ARM/x86 のオプションを分離）、arch 変更時に compilerId/extraFlags を自動同期
-- `api/compile.ts`: Godbolt compiler ID を `x86-64g1420` → `cg142`（x86-64 GCC 14.2.0）に修正
+- `CCompilePanel.vue`: Godbolt compiler ID を `x86-64g1420` → `cg142`（x86-64 GCC 14.2.0）に修正
 - `SpecialRegPanel.vue`: x86 モード時に RSP/RBP/RIP の下に括弧付きサブラベル（Stack Pointer / Base Pointer / Instruction Pointer）を表示
 - `ExplainPanel.vue`: `overflow-hidden` 削除による `?` ポップアップクリップ問題を修正、arch 対応の構文記法ガイド（`HELP_ROWS_ARM` / `HELP_ROWS_X86`）を実装
 - `CodePanel.vue`: アセンブラコピーボタン（Material Icons `content_copy`）を追加、"Copied!" フェードアニメーション付き（0.8秒）

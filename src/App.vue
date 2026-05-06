@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-gray-900 text-gray-100">
-    <div class="max-w-screen-2xl mx-auto px-4 py-4 space-y-3">
+    <div class="max-w-screen-2xl mx-auto px-4 py-4 space-y-3 pb-24 md:pb-4">
       <!-- Header -->
       <div class="flex items-center gap-3">
         <h1 class="text-white font-bold text-lg shrink-0">AsmWalker</h1>
@@ -55,7 +55,10 @@
         <div class="flex flex-wrap items-center gap-3">
           <ArchSwitch />
         </div>
-        <StepController />
+        <!-- デスクトップのみ表示 -->
+        <div class="hidden md:block">
+          <StepController />
+        </div>
       </div>
 
       <!-- C compile editor -->
@@ -92,6 +95,11 @@
 
       <!-- Diff panel: 最下部、デフォルト非表示 -->
       <DiffPanel />
+    </div>
+
+    <!-- スマホ用固定ステップコントローラー -->
+    <div class="fixed bottom-0 left-0 right-0 md:hidden bg-gray-900 border-t border-gray-700 px-4 py-3 flex justify-center z-50">
+      <StepController />
     </div>
   </div>
 </template>

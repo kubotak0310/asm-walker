@@ -5,14 +5,14 @@
       :disabled="isFirst"
       class="px-3 py-2 rounded bg-gray-700 text-gray-200 text-sm hover:bg-gray-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
     >
-      ◀ 戻る <kbd class="ml-1 text-xs text-gray-400">←</kbd>
+      ◀ 戻る <kbd class="ml-1 text-xs text-gray-400 hidden md:inline">←</kbd>
     </button>
     <button
       @click="nextStep"
       :disabled="isLast"
       class="px-4 py-2 rounded bg-green-700 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
     >
-      次のステップ ▶ <kbd class="ml-1 text-xs text-green-300">→</kbd>
+      次のステップ ▶ <kbd class="ml-1 text-xs text-green-300 hidden md:inline">→</kbd>
     </button>
     <button
       @click="reset"
@@ -20,7 +20,7 @@
     >
       リセット
     </button>
-    <span class="text-gray-400 text-sm font-mono">{{ currentStep }} / {{ totalSteps }}</span>
+    <span class="text-gray-400 text-sm font-mono hidden md:inline">{{ currentStep }} / {{ totalSteps }}</span>
   </div>
 </template>
 

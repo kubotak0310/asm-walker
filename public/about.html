@@ -130,18 +130,19 @@
   <p>対応命令（x86-64）: <code>MOV / LEA / PUSH / POP / ADD / SUB / IMUL / IDIV / AND / OR / XOR / SHL / SHR / CMP / TEST / JMP / Jcc / CALL / RET / LEAVE</code> ほか</p>
   <p>対応命令（ARM）: <code>MOV / LDR / STR / ADD / SUB / MUL / CMP / B / BL / BX / PUSH / POP / LSL / LSR</code> ほか</p>
 
-  <h2>学習ガイド</h2>
+  <h2 id="guides">学習ガイド</h2>
   <p>アセンブラの仕組みをより深く理解するための解説ページを用意しています。</p>
   <table>
     <thead>
       <tr><th>ガイド</th><th>内容</th></tr>
     </thead>
     <tbody>
-      <tr><td><a href="/guide/function-call.html">関数呼び出しの仕組み</a></td><td>引数の渡し方・戻り先アドレス・スタックフレーム・戻り値の返し方</td></tr>
+      <tr><td><a href="/guide/machine-code.html">マシン語とアセンブラ、そしてPC</a></td><td>マシン語の正体・アセンブラとの1対1対応・プログラムカウンタの役割と分岐命令</td></tr>
       <tr><td><a href="/guide/asm-reading.html">アセンブラの読み方</a></td><td>MOV / ADD / LDR / CMP / PUSH など代表的な命令の読み方と構文解説</td></tr>
       <tr><td><a href="/guide/stack.html">スタックの仕組み</a></td><td>PUSH/POP の正体・スタックポインタ・ローカル変数の確保と解放</td></tr>
-      <tr><td><a href="/guide/pointer.html">ポインタとアセンブラ</a></td><td>C のポインタがアセンブラでどう見えるか・間接参照・配列アクセス</td></tr>
+      <tr><td><a href="/guide/function-call.html">関数呼び出しの仕組み</a></td><td>引数の渡し方・戻り先アドレス・スタックフレーム・戻り値の返し方</td></tr>
       <tr><td><a href="/guide/branch.html">条件分岐とフラグレジスタ</a></td><td>Z/N/C/V フラグ・CMP/TEST・if-else・ループの翻訳パターン</td></tr>
+      <tr><td><a href="/guide/pointer.html">ポインタとアセンブラ</a></td><td>C のポインタがアセンブラでどう見えるか・間接参照・配列アクセス</td></tr>
     </tbody>
   </table>
 

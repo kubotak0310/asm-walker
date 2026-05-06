@@ -175,6 +175,12 @@
 
     .subtitle { color: #666; font-size: 0.95rem; margin-top: 0.25rem; margin-bottom: 2rem; }
     footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
     nav.toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0 2rem; }
     nav.toc h2 { font-size: 1rem; margin: 0 0 0.5rem; border: none; padding: 0; color: #555; }
     nav.toc ol { margin: 0; padding-left: 1.3rem; }
@@ -613,6 +619,11 @@ void infinite(void) {
 
   <footer>
     AsmWalker ガイド
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/asm-reading.html">← アセンブラの読み方</a></span>
+      <a href="/about.html#guides" class="guide-nav-center">ガイド一覧</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/function-call.html">関数呼び出しの仕組み →</a></span>
+    </nav>
   </footer>
 
 </body>

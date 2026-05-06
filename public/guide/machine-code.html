@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>マシン語とアセンブラ、そしてPC — AsmWalker ガイド</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    .memory-diagram {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.85rem;
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 0.6rem 1.2rem;
+      line-height: 1.8;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .memory-diagram th, .memory-diagram td {
+      padding: 0.15rem 1.2rem 0.15rem 0;
+      vertical-align: top;
+      border: none;
+      white-space: nowrap;
+    }
+    .memory-diagram th:first-child, .memory-diagram td:first-child {
+      padding-left: 0.8rem;
+    }
+    .memory-diagram thead tr { border-bottom: 1px solid #ddd; }
+    .memory-diagram .addr  { color: #888; }
+    .memory-diagram .bytes { color: #0066cc; font-weight: 600; }
+    .memory-diagram .asm   { color: #2e7d32; }
+    .memory-diagram .note-col { color: #555; }
+    .memory-diagram .pc-row td { background: #fff3e0; }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+  <h1>マシン語とアセンブラ、そしてPC</h1>
+  <p>プログラムを書くとき、私たちは C や Python といった「人間が読みやすい言語」を使います。しかし CPU が実際に読むのは <strong>マシン語（機械語）</strong> と呼ばれる数値の羅列です。このページでは「マシン語とは何か」「アセンブラとどう対応するか」、そして「CPU がどの順番で命令を実行するか」を担う <strong>プログラムカウンタ（PC）</strong> について説明します。</p>
+
+  <div class="toc">
+    <h4>目次</h4>
+    <ol>
+      <li><a href="#machine-code">マシン語とは</a></li>
+      <li><a href="#assembly">アセンブラはマシン語の別名</a></li>
+      <li><a href="#encoding">命令エンコーディングを覗いてみる</a></li>
+      <li><a href="#pc">プログラムカウンタ（PC）の役割</a></li>
+      <li><a href="#pc-advance">PCが進む仕組み</a></li>
+      <li><a href="#jump">分岐命令とPCの書き換え</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="machine-code">1. マシン語とは</h2>
+
+  <p>CPU はメモリから「命令」を読み取って動作します。この命令は <strong>整数値（バイト列）</strong> として表現されており、これを <strong>マシン語</strong> と呼びます。</p>
+
+  <p>たとえば次の C コードをコンパイルすると：</p>
+  <pre><code>int a = 3 + 5;</code></pre>
+
+  <p>メモリ上には次のようなバイト列が書き込まれます（ARM Cortex-M の場合）：</p>
+
+  <table class="memory-diagram">
+    <thead>
+      <tr><th class="addr">アドレス</th><th class="bytes">バイト列（16進数）</th><th class="asm">意味</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="addr">0x08000000</td><td class="bytes">03 20</td><td class="asm">MOV r0, #3</td></tr>
+      <tr><td class="addr">0x08000002</td><td class="bytes">05 21</td><td class="asm">MOV r1, #5</td></tr>
+      <tr><td class="addr">0x08000004</td><td class="bytes">08 18</td><td class="asm">ADD r0, r1, r0</td></tr>
+    </tbody>
+  </table>
+
+  <p><code>03 20</code> という2バイトは、「レジスタ r0 に値 3 を入れろ」という命令を CPU が解釈できる形式でエンコードしたものです。</p>
+
+  <div class="key">
+    <strong>マシン語 = CPU が唯一理解できる言語：</strong><br>
+    CPU は電気信号の ON/OFF（0と1）しか扱えません。マシン語はその 0 と 1 の列を16進数で表記したものです。
+    C言語のような高級言語は人間のために作られた表記であり、最終的には必ずこのバイト列に変換されて初めて CPU が実行できます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="assembly">2. アセンブラはマシン語の別名</h2>
+
+  <p>マシン語のバイト列を人間が書いたり読んだりするのは困難です。そこで、各命令に対して <strong>ニーモニック（覚えやすい名前）</strong> を付けたのが <strong>アセンブリ言語</strong>（アセンブラ）です。</p>
+
+  <p><strong>マシン語とアセンブラは 1対1 に対応します。</strong></p>
+
+  <table>
+    <thead>
+      <tr><th>マシン語（16進数）</th><th>アセンブラ命令</th><th>意味</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>03 20</code></td><td><code>MOV r0, #3</code></td><td>r0 ← 3</td></tr>
+      <tr><td><code>05 21</code></td><td><code>MOV r1, #5</code></td><td>r1 ← 5</td></tr>
+      <tr><td><code>08 18</code></td><td><code>ADD r0, r1, r0</code></td><td>r0 ← r1 + r0</td></tr>
+      <tr><td><code>70 47</code></td><td><code>BX LR</code></td><td>PC ← LR（関数から戻る）</td></tr>
+    </tbody>
+  </table>
+
+  <p>アセンブラソースファイル（<code>.s</code>）を <strong>アセンブル</strong> すると対応するバイト列が生成され、実行可能なバイナリになります。逆に実行ファイルをバイト列から読み直してニーモニックに変換することを <strong>逆アセンブル（disassemble）</strong> と呼びます。</p>
+
+  <div class="key">
+    <strong>C → アセンブラ → マシン語 の流れ：</strong><br>
+    <ol style="margin:0.5rem 0 0;">
+      <li>C コードを <strong>コンパイル</strong> してアセンブラを生成（GCC の仕事）</li>
+      <li>アセンブラを <strong>アセンブル</strong> してバイト列に変換（as の仕事）</li>
+      <li>バイト列を含む <strong>実行ファイル</strong>（ELF / EXE 等）が完成</li>
+    </ol>
+    AsmWalker では Godbolt API 経由でステップ1・2を自動的に行い、その結果のアセンブラをステップ実行できます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="encoding">3. 命令エンコーディングを覗いてみる</h2>
+
+  <p>マシン語のバイト列は、命令の種類・対象レジスタ・即値などを決まったビットフォーマットに詰め込んだものです。</p>
+
+  <h3>ARM Thumb 命令の例: <code>MOV r0, #3</code></h3>
+
+  <pre><code>2バイト（16bit Thumb）: 0x2003
+
+ビット表現:  0 0 1 0 0  0 0 0  0 0 0 0 0 0 1 1
+             ─────────  ─────  ───────────────
+             オペコード  Rd=r0  即値 = 3 (0x03)
+              MOV imm</code></pre>
+
+  <p>CPU はこの16ビット列を受け取ると「r0 に値 3 を入れる」と解釈します。命令の種類（オペコード）、対象レジスタ（Rd）、定数値（即値）が一つのバイト列に収まっています。</p>
+
+  <h3>x86-64 命令の例: <code>MOV eax, 3</code></h3>
+
+  <pre><code>5バイト: B8 03 00 00 00
+
+B8       = オペコード（MOV eax, imm32）
+03 00 00 00 = 即値 3（リトルエンディアン 32bit）</code></pre>
+
+  <p>x86 は命令によってバイト長が異なります（1〜15バイト）。ARM Thumb は主に2バイトまたは4バイトで固定長に近い設計です。</p>
+
+  <div class="note">
+    <strong>なぜこの話が重要か：</strong><br>
+    バイト列を見ると「なぜ PC が 2 ずつ・4 ずつ進むのか」が自然に理解できます。
+    1命令が2バイトであれば、次の命令のアドレスは「現在のアドレス + 2」です。
+    命令がメモリ上に隙間なく並んでいるからこそ、PCを命令長分だけ進めれば次の命令に届きます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="pc">4. プログラムカウンタ（PC）の役割</h2>
+
+  <p>CPU は <strong>「今どの命令を実行するか」</strong> を常に管理しなければなりません。その役割を担う専用レジスタが <strong>プログラムカウンタ（Program Counter / PC）</strong> です。</p>
+
+  <ul>
+    <li>ARM では <strong>r15（PC）</strong> と呼ばれます</li>
+    <li>x86-64 では <strong>RIP（Instruction Pointer）</strong> と呼ばれます</li>
+  </ul>
+
+  <p>PC には「次に実行する命令のメモリアドレス」が格納されています。CPU はこの流れを繰り返すことでプログラムを実行します：</p>
+
+  <ol>
+    <li>PC が指すアドレスからマシン語命令をフェッチ（読み出し）</li>
+    <li>命令をデコード（解釈）</li>
+    <li>命令を実行（レジスタ・メモリの更新など）</li>
+    <li>PC を次の命令のアドレスに更新</li>
+    <li>1 に戻る</li>
+  </ol>
+
+  <p>この繰り返しを <strong>フェッチ・デコード・実行サイクル（Fetch-Decode-Execute cycle）</strong> と呼びます。</p>
+
+  <table class="memory-diagram">
+    <thead>
+      <tr><th class="addr">アドレス</th><th class="bytes">マシン語</th><th class="asm">アセンブラ</th><th></th></tr>
+    </thead>
+    <tbody>
+      <tr class="pc-row"><td class="addr">0x08000000</td><td class="bytes">03 20</td><td class="asm">MOV r0, #3</td><td class="note-col">← PC = 0x08000000（ここを実行）</td></tr>
+      <tr><td class="addr">0x08000002</td><td class="bytes">05 21</td><td class="asm">MOV r1, #5</td><td></td></tr>
+      <tr><td class="addr">0x08000004</td><td class="bytes">08 18</td><td class="asm">ADD r0, r1, r0</td><td></td></tr>
+      <tr><td class="addr">0x08000006</td><td class="bytes">70 47</td><td class="asm">BX LR</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <p>PC が <code>0x08000000</code> を指しているとき、CPU は <code>03 20</code>（= <code>MOV r0, #3</code>）を読み取って実行し、PC を <code>0x08000002</code> に進めます。</p>
+
+  <div class="key">
+    <strong>「PC が命令を指す」とはどういう意味か：</strong><br>
+    プログラムはメモリ上に「命令が並んだリスト」として存在しています。
+    PC は「今何行目を実行しているか」を示す行番号、あるいはエディタのカーソルのような存在です。
+    CPU は PC が指す位置から命令を読んで実行し、通常は自動的に次へ進めます。
+    しかし特定の命令は、PC を全く別の位置に強制的に書き換えます。それが分岐・関数呼び出しの正体です。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="pc-advance">5. PCが進む仕組み</h2>
+
+  <p>命令が実行されると、CPU は PC を「その命令のバイト数だけ」進めます。どちらのアーキテクチャも固定長ではなく、命令ごとに長さが異なります。</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM Thumb-2（2バイトと4バイトが混在）</h4>
+      <pre><code>PC = 0x08000000
+<span class="comment">; PUSH {r7, lr} を実行（2バイト）</span>
+PC = 0x08000000 + 2 = 0x08000002
+<span class="comment">; MOV r0, #3 を実行（2バイト）</span>
+PC = 0x08000002 + 2 = 0x08000004
+<span class="comment">; BL add を実行（4バイト）</span>
+PC = 0x08000004 + 4 = 0x08000008</code></pre>
+      <p style="font-size:0.87rem; margin-top:0.5rem; color:#555;">単純な命令は2バイト、BL などの長距離ジャンプ命令は4バイトになる。</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64（1〜15バイトの可変長）</h4>
+      <pre><code>PC = 0x401000
+<span class="comment">; push rbp を実行（1バイト）</span>
+PC = 0x401000 + 1 = 0x401001
+<span class="comment">; mov rbp, rsp を実行（3バイト）</span>
+PC = 0x401001 + 3 = 0x401004
+<span class="comment">; sub rsp, 16 を実行（4バイト）</span>
+PC = 0x401004 + 4 = 0x401008</code></pre>
+      <p style="font-size:0.87rem; margin-top:0.5rem; color:#555;">命令ごとに長さが大きく異なる。CPU はデコード時に命令長を判定してから PC を進める。</p>
+    </div>
+  </div>
+
+  <p>ARM Thumb-2 は2バイトと4バイトの2種類のみなのに対し、x86 は1〜15バイトまで命令ごとに大きく異なります。どちらも先頭のビット列を読むことで CPU が命令長を自動的に識別します。</p>
+
+  <div class="key" style="margin-top: 1.5rem;">
+    <strong>⚠ AsmWalker ではすべての命令を4バイト固定として扱います</strong><br><br>
+    上の例は実際の命令長に基づいて PC が進む様子を示しました。しかし AsmWalker では異なります。<br><br>
+    本来の命令バイト数を取得するには各命令をエンコード・逆アセンブルする必要があります。
+    AsmWalker では <strong>学習のしやすさを優先し</strong>、ARM Thumb の2バイト命令も x86 の可変長命令も、
+    すべて <strong>4バイト固定</strong> の仮想アドレスを割り当てています。<br><br>
+    そのため ARM サンプルをコンパイルすると、アドレスは常に
+    <code>0x08000000 → 0x08000004 → 0x08000008 …</code> と <strong>4ずつ</strong> 増えます。
+    実機の逆アセンブル結果（2ずつ・4ずつ混在）とは見た目が異なりますが、
+    「ステップごとに PC が次の命令を指す」という本質的な動きを学ぶためには支障ありません。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="jump">6. 分岐命令とPCの書き換え</h2>
+
+  <p>通常の命令では PC が「命令長分だけ自動的に進む」だけです。しかし <code>if</code> 文や関数呼び出しでは、PC を特定のアドレスへ強制的に書き換える必要があります。これが <strong>分岐命令（Branch instruction）</strong> です。</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM の分岐命令</h4>
+      <table style="margin:0.5rem 0; font-size:0.88rem;">
+        <thead><tr><th>命令</th><th>動作</th></tr></thead>
+        <tbody>
+          <tr><td><code>B label</code></td><td>PC ← label のアドレス（無条件ジャンプ）</td></tr>
+          <tr><td><code>BEQ label</code></td><td>Z フラグが 1 なら PC ← label</td></tr>
+          <tr><td><code>BL func</code></td><td>LR ← PC+4, PC ← func（関数呼び出し）</td></tr>
+          <tr><td><code>BX LR</code></td><td>PC ← LR（関数から戻る）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 の分岐命令</h4>
+      <table style="margin:0.5rem 0; font-size:0.88rem;">
+        <thead><tr><th>命令</th><th>動作</th></tr></thead>
+        <tbody>
+          <tr><td><code>JMP label</code></td><td>RIP ← label のアドレス（無条件ジャンプ）</td></tr>
+          <tr><td><code>JE label</code></td><td>ZF=1 なら RIP ← label</td></tr>
+          <tr><td><code>CALL func</code></td><td>[RSP] ← RIP+?, RSP-=8, RIP ← func</td></tr>
+          <tr><td><code>RET</code></td><td>RIP ← [RSP], RSP+=8（関数から戻る）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p>分岐命令が実行されると PC が大きく別の場所に飛びます。条件分岐では「ある条件を満たしたときだけ PC を書き換える」ため、同じプログラムでも入力によって異なる経路を通ります。</p>
+
+  <h3>具体例：if 文がアセンブラになると</h3>
+
+  <pre><code>int a = 5;
+int b = 3;
+if (a > b) {
+    a = a - b;  // この行が実行される
+}</code></pre>
+
+  <p>ARM Cortex-M のアセンブラ出力（概略）：</p>
+
+  <pre><code>        mov  r0, #5         <span class="comment">; a = 5</span>
+        mov  r1, #3         <span class="comment">; b = 3</span>
+        cmp  r0, r1         <span class="comment">; a と b を比較（フラグを更新）</span>
+        ble  .end           <span class="comment">; a &lt;= b なら .end へジャンプ（PC を書き換え）</span>
+        sub  r0, r0, r1     <span class="comment">; a = a - b（a > b のときだけ実行）</span>
+.end:</code></pre>
+
+  <p><code>CMP</code> 命令が内部フラグ（N/Z/C/V）を更新し、<code>BLE</code> 命令がそのフラグを見て「PC をジャンプ先に書き換えるかどうか」を決めます。条件が成立しなければ PC は普通に1命令分進み、次の <code>SUB</code> が実行されます。</p>
+
+  <div class="key">
+    <strong>まとめ：PCとアセンブラの関係</strong>
+    <ul style="margin:0.5rem 0 0;">
+      <li>マシン語はメモリに格納されたバイト列。アセンブラはその人間可読な表現。</li>
+      <li>PC（プログラムカウンタ）は「次に実行する命令のアドレス」を持つレジスタ。</li>
+      <li>通常の命令では PC が命令長分だけ自動的に進む。</li>
+      <li>分岐命令（B/BL/BX/JMP/CALL/RET）は PC を特定アドレスへ書き換える。</li>
+      <li>PC を変えることで、条件分岐・ループ・関数呼び出し・戻りがすべて実現される。</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    AsmWalker の右下「特殊レジスタ」パネルに PC（ARM）または RIP（x86）の現在値がリアルタイムで表示されます。
+    ステップを1つ進めるたびにアドレスが変化する様子を確認してみましょう。
+    関数呼び出し（<code>BL</code> / <code>CALL</code>）のステップでは PC が大きく別のアドレスに飛ぶことが確認できます。
+  </div>
+
+  <footer>
+    AsmWalker ガイド
+    <nav class="guide-nav">
+      <span class="guide-nav-side"></span>
+      <a href="/about.html#guides" class="guide-nav-center">ガイド一覧</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/asm-reading.html">アセンブラの読み方 →</a></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

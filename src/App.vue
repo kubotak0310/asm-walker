@@ -15,6 +15,10 @@
             </button>
             <div class="absolute right-0 top-full pt-1 z-50 hidden group-hover:block">
               <div class="w-52 bg-gray-800 border border-gray-700 rounded shadow-lg">
+                <a href="/guide/machine-code.html" target="_blank" rel="noopener"
+                   class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
+                  <span class="material-icons text-sm text-gray-500">article</span>マシン語とアセンブラ
+                </a>
                 <a href="/guide/asm-reading.html" target="_blank" rel="noopener"
                    class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
                   <span class="material-icons text-sm text-gray-500">article</span>アセンブラの読み方

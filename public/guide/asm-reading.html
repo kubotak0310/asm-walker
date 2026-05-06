@@ -109,6 +109,12 @@
     .toc a { color: #0066cc; text-decoration: none; }
     .toc a:hover { text-decoration: underline; }
     footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -158,6 +164,26 @@
   <div class="key">
     <strong>ニモニックを覚えるコツ：</strong><br>
     完全な英単語を意識すると覚えやすくなります。<code>MOV</code>=Move, <code>CMP</code>=Compare, <code>LDR</code>=Load Register, <code>STR</code>=Store Register, <code>BL</code>=Branch with Link（サブルーチン呼び出し）。
+  </div>
+
+  <h3>命令長とアドレス表示</h3>
+
+  <p>実際の命令は1行ではなく、メモリ上では複数バイトのバイト列として格納されています。命令の種類によってバイト数が変わります。</p>
+
+  <table>
+    <thead>
+      <tr><th>アーキテクチャ</th><th>実際の命令長</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ARM Thumb / Thumb-2</td><td>2バイトまたは4バイトが混在</td></tr>
+      <tr><td>x86-64</td><td>1〜15バイト（命令によって可変）</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>AsmWalker ではすべての命令を「4バイト固定」として扱います：</strong><br>
+    アセンブラパネルのアドレスは実際の命令長ではなく、学習のしやすさを優先した仮想アドレスです。
+    詳しくは<a href="/guide/machine-code.html#pc-advance">マシン語とアセンブラ、そしてPC — PCが進む仕組み</a>を参照してください。
   </div>
 
   <!-- ============================================================ -->
@@ -470,6 +496,11 @@ pop  rbp       <span class="comment">; rbp = [rsp], rsp += 8</span></code></pre>
 
   <footer>
     AsmWalker ガイド
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/machine-code.html">← マシン語とアセンブラ</a></span>
+      <a href="/about.html#guides" class="guide-nav-center">ガイド一覧</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/stack.html">スタックとは →</a></span>
+    </nav>
   </footer>
 
 </body>

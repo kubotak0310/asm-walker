@@ -4,7 +4,7 @@ emoji: "📞"
 type: "tech"
 topics: ["アセンブラ", "arm", "c言語", "低レイヤー", "スタック"]
 published: true
-slug: "asm-function-call-arm"
+slug: "asm-function-call"
 ---
 
 ## 関数呼び出しは「魔法」じゃなかった

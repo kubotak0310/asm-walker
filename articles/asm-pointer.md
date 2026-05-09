@@ -2,7 +2,7 @@
 title: "C言語のポインタはアセンブラでどう見えるか。怖くなくなる瞬間の話"
 emoji: "🔍"
 type: "tech"
-topics: ["assembly", "arm", "c言語", "低レイヤー", "ポインタ"]
+topics: ["アセンブラ", "arm", "c言語", "低レイヤー", "ポインタ"]
 published: true
 ---
 

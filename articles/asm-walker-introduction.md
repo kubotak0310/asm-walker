@@ -2,7 +2,7 @@
 title: 'AI時代だからこそ、CPUの動きを知りたい。アセンブラ可視化ツールを作った'
 emoji: '⚙️'
 type: 'idea'
-topics: ['assembly', 'arm', 'x86', 'c言語', '低レイヤー']
+topics: ['アセンブラ', 'arm', 'x86', 'c言語', '低レイヤー']
 published: true
 slug: '480e2ef8322e6c'
 ---

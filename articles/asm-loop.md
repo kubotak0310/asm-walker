@@ -2,7 +2,7 @@
 title: "for ループはアセンブラでどうなるか。C のコードが「ただの分岐」になる瞬間"
 emoji: "🔄"
 type: "tech"
-topics: ["assembly", "arm", "c言語", "低レイヤー", "コンパイラ"]
+topics: ["アセンブラ", "arm", "c言語", "低レイヤー", "コンパイラ"]
 published: true
 ---
 

@@ -2,7 +2,7 @@
 title: "関数を呼び出すとき、裏で何が起きているのか。アセンブラで全部見えた"
 emoji: "📞"
 type: "tech"
-topics: ["assembly", "arm", "c言語", "低レイヤー", "スタック"]
+topics: ["アセンブラ", "arm", "c言語", "低レイヤー", "スタック"]
 published: true
 ---
 

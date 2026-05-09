@@ -24,6 +24,7 @@ import { computed } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
 import { hexU32 } from '@/core/simulator'
 import { BASE_ROM_DATA } from '@/core/types'
+import { kindClass } from '@/composables/useColors'
 
 const { currentState, prevState } = useSimulator()
 
@@ -87,16 +88,14 @@ function rowClass(cell: Cell): string[] {
 
 function valueClass(cell: Cell): string {
   if (cell.uninit) return 'text-gray-600 italic'
-  if (cell.kind === 'arr') return 'text-green-300 font-bold'
-  if (cell.kind === 'hw') return 'text-orange-300 font-bold'
+  const kc = kindClass(cell.kind)
+  if (kc.value) return kc.value
   if (cell.isSP) return 'text-orange-300'
   if (cell.isNew) return 'text-white'
   return 'text-gray-300'
 }
 
 function labelClass(cell: Cell): string {
-  if (cell.kind === 'arr') return 'text-green-400 text-xs ml-2'
-  if (cell.kind === 'hw') return 'text-orange-400 text-xs ml-2'
-  return 'text-gray-400 text-xs ml-2'
+  return kindClass(cell.kind).label
 }
 </script>

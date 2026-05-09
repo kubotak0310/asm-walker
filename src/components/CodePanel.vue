@@ -33,7 +33,7 @@
           :class="outerLineClass(line, i)"
         >
           <template v-if="line.isHeader">
-            <span :class="[phaseColor(line.phase), unreachableInfo.lines.has(i) ? 'opacity-40' : '']">{{ line.text }}</span>
+            <span :class="[phaseClass(line.phase), unreachableInfo.lines.has(i) ? 'opacity-40' : '']">{{ line.text }}</span>
           </template>
 
           <template v-else-if="!line.text.trim()">
@@ -56,10 +56,12 @@
             >▶</span>
 
             <span :class="[instrTextClass(i), 'shrink-0 min-w-[30ch]']">
-              <span
+              <BadgeLabel
                 v-if="currentStepData?.isArr && activeAsmLine === i"
-                class="bg-green-800 text-green-200 px-1 rounded mr-1"
-              >arr</span>
+                kind="arr"
+                text="arr"
+                class="mr-1"
+              />
               {{ line.text.trim() }}
             </span>
             <span
@@ -85,7 +87,9 @@ import { computed, ref, watch, nextTick, onUnmounted } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
 import { BASE_PC_ARM } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
-import type { AsmLine, Phase } from '@/core/types'
+import type { AsmLine } from '@/core/types'
+import BadgeLabel from './BadgeLabel.vue'
+import { phaseClass } from '@/composables/useColors'
 
 const { preset, currentStepData, currentStep } = useSimulator()
 
@@ -209,17 +213,6 @@ function instrTextClass(i: number): string {
   return 'text-gray-300'
 }
 
-function phaseColor(phase?: Phase): string {
-  const map: Record<string, string> = {
-    main: 'text-purple-400',
-    caller: 'text-purple-400',
-    callee: 'text-green-400',
-    hw: 'text-orange-400',
-    isr: 'text-green-400',
-    ret: 'text-red-400',
-  }
-  return `${map[phase ?? ''] ?? 'text-gray-400'} text-xs`
-}
 
 const copied = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | null = null

@@ -45,7 +45,7 @@
             </table>
           </div>
         </div>
-        <span v-if="step.isArr" class="text-xs bg-green-800 text-green-200 px-1.5 py-0.5 rounded">{{ $t('explainPanel.arrayBadge') }}</span>
+        <BadgeLabel v-if="step.isArr" kind="arr" :text="$t('explainPanel.arrayBadge')" />
       </div>
       <p class="text-gray-200 text-sm pl-2">
         <span v-if="step.fullName" class="text-blue-400 font-bold tracking-wide">{{ step.fullName }}</span>
@@ -71,6 +71,7 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSimulator } from '@/composables/useSimulator'
+import BadgeLabel from './BadgeLabel.vue'
 import { getFullName as getFullNameARM, getSyntax as getSyntaxARM } from '@/core/arm/mnemonics'
 import { getFullName as getFullNameX86, getSyntax as getSyntaxX86 } from '@/core/x86/mnemonics'
 

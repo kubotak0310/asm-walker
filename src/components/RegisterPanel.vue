@@ -12,18 +12,21 @@
       >
         <span :class="labelClass(reg.name)">
           {{ reg.name }}
-          <span
+          <BadgeLabel
             v-if="isReturnStep && reg.name === returnReg"
-            class="ml-1 bg-yellow-700/70 text-yellow-200 px-1 rounded text-xs align-middle"
-          >{{ $t('registerPanel.returnBadge') }}</span>
-          <span
+            kind="return"
+            :text="$t('registerPanel.returnBadge')"
+          />
+          <BadgeLabel
             v-else-if="argBadgeIndex(reg.name) !== null"
-            class="ml-1 bg-blue-700/70 text-blue-200 px-1 rounded text-xs align-middle"
-          >{{ $t('registerPanel.argBadge') }}{{ argBadgeIndex(reg.name)! + 1 }}</span>
-          <span
+            kind="arg"
+            :text="`${$t('registerPanel.argBadge')}${argBadgeIndex(reg.name)! + 1}`"
+          />
+          <BadgeLabel
             v-else-if="currentStepData?.ptrReg === reg.name"
-            class="ml-1 bg-purple-700/70 text-purple-200 px-1 rounded text-xs align-middle"
-          >ptr</span>
+            kind="ptr"
+            text="ptr"
+          />
         </span>
         <span :class="valueClass(reg.name)">{{ hexU32(reg.value) }}</span>
       </div>
@@ -35,6 +38,7 @@
 import { computed } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
 import { hexU32 } from '@/core/simulator'
+import BadgeLabel from './BadgeLabel.vue'
 
 const { arch, currentState, prevState, currentStepData, isReturnStep, returnReg, callArgCount } = useSimulator()
 

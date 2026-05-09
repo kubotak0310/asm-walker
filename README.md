@@ -1,31 +1,31 @@
 # AsmWalker
 
-C言語とアセンブラの対応を、1命令ずつ確認しながら学べるブラウザ学習ツール。
+A browser-based learning tool for exploring C-to-assembly correspondence, one instruction at a time.
 
 👉 **https://asm-walker.vercel.app**
 
-📝 **[紹介記事（Zenn）](https://zenn.dev/kubotak0630/articles/480e2ef8322e6c)**
+[日本語版 README](./README.ja.md)
 
 ---
 
-## できること
+## Features
 
-- **C コードをその場でコンパイル** — Godbolt Compiler Explorer API 経由で本物の GCC がコンパイル
-- **1命令ずつステップ実行** — `◀` / `▶` ボタンまたはキーボードの `←` / `→` キーで操作
-- **C の行とアセンブラの行が同時にハイライト** — どの C コードがどの命令に対応するかが一目でわかる
-- **レジスタ・スタックの変化をリアルタイム表示** — 値の変化を色でハイライト
-- **命令の日本語説明** — 各命令のフルネーム・構文・実行結果を日本語で表示
-- **スタックフレームの色分け図** — 関数呼び出しのネストをビジュアルで確認
-- **ARM / x86-64 の両対応**
+- **Compile C code in-browser** — Uses the real GCC via the Godbolt Compiler Explorer API
+- **Step through instructions one by one** — Use the `◀` / `▶` buttons or `←` / `→` keyboard shortcuts
+- **Synchronized C and assembly highlighting** — See exactly which C line corresponds to each instruction
+- **Live register and stack visualization** — Value changes are highlighted in color
+- **Instruction explanations** — Full name, syntax, and execution effect for each instruction (EN/JA)
+- **Stack frame diagram** — Visualize function call nesting with color-coded frames
+- **ARM Cortex-M and x86-64 support**
 
-## 対応アーキテクチャ
+## Supported Architectures
 
-| アーキテクチャ | コンパイラ |
+| Architecture | Compiler |
 |---|---|
-| ARM Cortex-M | ARM GCC 11.2.1 / 13.2.0 / 14.3.0 |
-| x86-64 | x86-64 GCC 14.2.0（Intel 構文） |
+| ARM Cortex-M | ARM GCC 15.2.0 |
+| x86-64 | x86-64 GCC 14.2.0 (Intel syntax) |
 
-## ローカルで動かす
+## Run Locally
 
 ```bash
 git clone https://github.com/kubotak0310/asm-walker.git
@@ -34,29 +34,30 @@ npm install
 npm run dev
 ```
 
-ブラウザで `http://localhost:5173` を開く。
+Open `http://localhost:5173` in your browser.
 
-## 技術構成
+## Tech Stack
 
-| レイヤー | 技術 |
+| Layer | Technology |
 |---|---|
-| フロントエンド | Vue 3 + TypeScript + Tailwind CSS |
-| エディタ | CodeMirror 6 |
-| コンパイル | Godbolt Compiler Explorer API |
-| ビルドツール | Vite |
-| ホスティング | Vercel |
+| Frontend | Vue 3 + TypeScript + Tailwind CSS |
+| i18n | vue-i18n v11 |
+| Editor | CodeMirror 6 |
+| Compilation | Godbolt Compiler Explorer API |
+| Build | Vite |
+| Hosting | Vercel |
 
-## 学習ガイド
+## Learning Guides
 
-ツール内のガイドメニューから読めます：
+Available from the Guide menu inside the tool *(currently Japanese only)*:
 
-- [マシン語とアセンブラ、そして PC](https://asm-walker.vercel.app/guide/machine-code.html)
-- [アセンブラの読み方](https://asm-walker.vercel.app/guide/asm-reading.html)
-- [スタックの仕組み](https://asm-walker.vercel.app/guide/stack.html)
-- [関数呼び出しの仕組み](https://asm-walker.vercel.app/guide/function-call.html)
-- [条件分岐とフラグレジスタ](https://asm-walker.vercel.app/guide/branch.html)
-- [ポインタとアセンブラ](https://asm-walker.vercel.app/guide/pointer.html)
+- [Machine Code, Assembly, and the PC](https://asm-walker.vercel.app/guide/machine-code.html)
+- [How to Read Assembly](https://asm-walker.vercel.app/guide/asm-reading.html)
+- [How the Stack Works](https://asm-walker.vercel.app/guide/stack.html)
+- [How Function Calls Work](https://asm-walker.vercel.app/guide/function-call.html)
+- [Conditional Branches and Flags](https://asm-walker.vercel.app/guide/branch.html)
+- [Pointers and Assembly](https://asm-walker.vercel.app/guide/pointer.html)
 
-## ライセンス
+## License
 
 [MIT](./LICENSE)

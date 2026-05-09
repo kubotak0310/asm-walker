@@ -4,6 +4,7 @@ emoji: "🔄"
 type: "tech"
 topics: ["アセンブラ", "arm", "c言語", "低レイヤー", "コンパイラ"]
 published: true
+slug: "asm-loop-arm-assembly"
 ---
 
 ## for ループ、アセンブラで書くと何行になるか知っていますか？

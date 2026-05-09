@@ -4,6 +4,7 @@ emoji: "🔍"
 type: "tech"
 topics: ["アセンブラ", "arm", "c言語", "低レイヤー", "ポインタ"]
 published: true
+slug: "asm-pointer-arm-assembly"
 ---
 
 ## なぜポインタという記法が存在するのか

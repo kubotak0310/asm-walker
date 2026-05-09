@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How the Stack Works — AsmWalker Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+    .hl  { color: #c0392b; font-weight: bold; }
+    .hl2 { color: #2471a3; font-weight: bold; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    .stack-diagram {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.85rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1rem 0;
+      max-width: 380px;
+    }
+    .stack-row {
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .stack-row:last-child { border-bottom: none; }
+    .stack-addr {
+      background: #f0f0f0;
+      color: #555;
+      padding: 0.35rem 0.6rem;
+      min-width: 90px;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+    }
+    .stack-val {
+      flex: 1;
+      padding: 0.35rem 0.8rem;
+      display: flex;
+      align-items: center;
+    }
+    .stack-sp  { background: #fff3e0; font-weight: bold; }
+    .stack-used { background: #e8f4fd; }
+    .stack-free { background: #fff; color: #aaa; }
+    .stack-label { color: #888; font-size: 0.8rem; margin-left: 0.5rem; }
+
+    .frame-stack-diagram {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.83rem;
+      margin: 1.2rem 0;
+      max-width: 520px;
+    }
+    .addr-hint {
+      color: #888;
+      font-size: 0.8rem;
+      padding: 0.2rem 0;
+    }
+    .frame-block {
+      border: 2px solid #ccc;
+      border-radius: 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .frame-block:first-of-type { border-radius: 6px 6px 0 0; }
+    .frame-block:last-of-type  { border-radius: 0 0 6px 6px; border-top: none; }
+    .frame-block + .frame-block { border-top: none; }
+    .frame-header {
+      padding: 0.3rem 0.8rem;
+      font-weight: bold;
+      font-size: 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .frame-cell {
+      border-top: 1px dashed #ddd;
+      padding: 0.28rem 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .frame-cell-offset { color: #888; font-size: 0.76rem; font-style: italic; }
+    .frame-access { color: #c0392b; font-size: 0.76rem; }
+    .fp-marker  { color: #0066cc; font-weight: bold; font-size: 0.78rem; padding-left: 0.4rem; }
+    .sp-row {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.3rem 0.8rem;
+      color: #e65100; font-weight: bold; font-size: 0.82rem;
+    }
+
+    .frame-main { border-color: #7c4dff; }
+    .frame-main .frame-header { background: #7c4dff; color: #fff; }
+    .frame-main .frame-cell   { background: #faf8ff; }
+
+    .frame-a { border-color: #2e7d32; }
+    .frame-a .frame-header { background: #2e7d32; color: #fff; }
+    .frame-a .frame-cell   { background: #f4fbf4; }
+
+    .frame-b { border-color: #e65100; }
+    .frame-b .frame-header { background: #e65100; color: #fff; }
+    .frame-b .frame-cell   { background: #fff8f4; }
+
+    .subtitle { color: #666; font-size: 0.95rem; margin-top: 0.25rem; margin-bottom: 2rem; }
+    footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+    nav.toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0 2rem; }
+    nav.toc h2 { font-size: 1rem; margin: 0 0 0.5rem; border: none; padding: 0; color: #555; }
+    nav.toc ol { margin: 0; padding-left: 1.3rem; }
+    nav.toc li { margin: 0.2rem 0; font-size: 0.93rem; }
+    nav.toc a { color: #0066cc; text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<h1>How the Stack Works</h1>
+  <p class="subtitle">AsmWalker Guide — Understanding memory and how the stack pointer moves</p>
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">What is the Stack?</a></li>
+      <li><a href="#s2">Where in Memory is the Stack?</a></li>
+      <li><a href="#s3">What PUSH and POP Really Do</a></li>
+      <li><a href="#s4">The Stack Pointer (SP / RSP)</a></li>
+      <li><a href="#s5">Why Functions Use the Stack</a></li>
+      <li><a href="#s6">Allocating and Releasing Local Variables</a></li>
+      <li><a href="#s7">Stack Overflow</a></li>
+      <li><a href="#s8">Summary</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="s1">1. What is the Stack?</h2>
+
+  <p>The stack is a <strong>Last In, First Out (LIFO)</strong> data structure. Think of stacking books — you take the top book off first.</p>
+
+  <pre><code>Push: place A, then B, then C on top
+Pop:  remove C first, then B, then A</code></pre>
+
+  <p>During program execution, this LIFO structure is used to temporarily hold local variables, return addresses, and saved registers.</p>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    The Stack panel on the right shows the stack memory in real time.
+    Step through and watch values being pushed and SP moving up and down.
+  </div>
+
+  <!-- 2 -->
+  <h2 id="s2">2. Where in Memory is the Stack?</h2>
+
+  <p>A program's memory is roughly divided into these regions:</p>
+
+  <pre><code>High address ↑
+┌─────────────────────────┐
+│  Stack                   │  ← local variables, return addresses, etc.
+│   ↓ (grows downward)     │
+│                          │
+│  Heap                    │  ← dynamic allocation (malloc)
+│   ↑ (grows upward)       │
+│                          │
+│  Data segment (.data)    │  ← global/static variables
+│  Code segment (.text)    │  ← instructions
+└─────────────────────────┘
+Low address ↓</code></pre>
+
+  <p>The key point: the stack <strong>grows from high addresses toward low addresses</strong>. Each time you push a value, the address gets smaller.</p>
+
+  <div class="key">
+    <strong>Note</strong><br>
+    "The stack grows downward" means addresses <em>decrease</em> as the stack fills.
+    Don't confuse this with the visual direction on screen (diagrams usually draw high addresses at the top).
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    The Stack panel displays <strong>high addresses at the top</strong>.
+    Each PUSH adds a new cell at the bottom — that is the stack growing toward lower addresses.
+  </div>
+
+  <!-- 3 -->
+  <h2 id="s3">3. What PUSH and POP Really Do</h2>
+
+  <p>PUSH and POP look simple but internally perform <strong>two steps: moving SP + reading/writing memory</strong>.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM Cortex-M</h4>
+      <pre><code><span class="comment">; PUSH {r4} expands to:</span>
+sub sp, sp, #4    <span class="comment">; SP -= 4</span>
+str r4, [sp]      <span class="comment">; [SP] ← r4</span>
+
+<span class="comment">; POP {r4} expands to:</span>
+ldr r4, [sp]      <span class="comment">; r4 ← [SP]</span>
+add sp, sp, #4    <span class="comment">; SP += 4</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code><span class="comment">; push rbp expands to:</span>
+sub rsp, 8        <span class="comment">; RSP -= 8</span>
+mov [rsp], rbp    <span class="comment">; [RSP] ← rbp</span>
+
+<span class="comment">; pop rbp expands to:</span>
+mov rbp, [rsp]    <span class="comment">; rbp ← [RSP]</span>
+add rsp, 8        <span class="comment">; RSP += 8</span></code></pre>
+    </div>
+  </div>
+
+  <p>ARM registers are 4 bytes (32-bit), x86-64 registers are 8 bytes (64-bit), so the SP adjustment amounts differ.</p>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    The Instruction Detail panel describes a PUSH as
+    <code>rsp ← rsp - 8; [rsp] ← rbp</code> — showing the two-step SP-move + memory-write as a single instruction.
+  </div>
+
+  <!-- 4 -->
+  <h2 id="s4">4. The Stack Pointer (SP / RSP)</h2>
+
+  <p>The stack pointer indicates how far the stack has been used.</p>
+
+  <table>
+    <thead>
+      <tr><th>Architecture</th><th>Register</th><th>Width</th><th>Role</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ARM Cortex-M</td><td><code>SP</code> (= r13)</td><td>32-bit</td><td>Current top of stack</td></tr>
+      <tr><td>x86-64</td><td><code>RSP</code></td><td>64-bit</td><td>Current top of stack</td></tr>
+    </tbody>
+  </table>
+
+  <p>SP always points to <strong>the address of the last pushed value</strong> (Full Descending stack). The convention is to decrement SP first, then write to that address.</p>
+
+  <h3>Tracing stack state changes</h3>
+
+  <p>Example of ARM PUSH/POP memory state:</p>
+
+  <div class="stack-diagram">
+    <div class="stack-row">
+      <div class="stack-addr">0x20008000</div>
+      <div class="stack-val stack-free">(unused)</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-addr">0x20007ffc</div>
+      <div class="stack-val stack-used">r4 = 0x12345678</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-addr">0x20007ff8</div>
+      <div class="stack-val stack-sp">← SP (after push r3)</div>
+    </div>
+    <div class="stack-row">
+      <div class="stack-addr">0x20007ff4</div>
+      <div class="stack-val stack-free">(unused)</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    Watch the SP value in the Special Registers panel.
+    It decreases (address goes down) with each PUSH and increases (address goes up) with each POP.
+  </div>
+
+  <!-- 5 -->
+  <h2 id="s5">5. Why Functions Use the Stack</h2>
+
+  <p>Functions need the stack for three main purposes:</p>
+
+  <ol>
+    <li><strong>Saving local variables</strong> — temporary storage for variables declared inside the function</li>
+    <li><strong>Saving the return address</strong> — where to return after the function finishes (x86: <code>call</code> pushes it automatically)</li>
+    <li><strong>Saving registers (callee-save)</strong> — preserving the caller's register values so the callee doesn't clobber them</li>
+  </ol>
+
+  <p>Together, these make up the <strong>stack frame</strong> — the section of stack dedicated to one function call. A new frame is pushed when a function is called and released when it returns.</p>
+
+  <h3>Stack layout for main → FuncA → FuncB</h3>
+
+  <p>With three levels of nested calls, the stack holds three frames stacked up. main's frame (called first) sits at the highest address; FuncB's frame (currently executing) sits at the lowest.</p>
+
+  <div class="frame-stack-diagram">
+    <div class="addr-hint">High address (initial SP) ▲</div>
+
+    <div class="frame-block frame-main">
+      <div class="frame-header">
+        <span>main's stack frame</span>
+      </div>
+      <div class="frame-cell">
+        <span>Saved LR (return address)</span>
+        <span class="frame-cell-offset"></span>
+      </div>
+      <div class="frame-cell">
+        <span>int x = 10</span>
+        <span class="frame-cell-offset">
+          [fp_main - 4] &nbsp;<span class="frame-access">← normal memory read/write</span>
+        </span>
+      </div>
+      <div class="frame-cell">
+        <span>int y = 20</span>
+        <span class="frame-cell-offset">[fp_main - 8]</span>
+      </div>
+      <div class="frame-cell" style="border-top: 2px solid #7c4dff;">
+        <span style="color:#555;">↕ FP_main (frame pointer)</span>
+        <span class="fp-marker">FP_main →</span>
+      </div>
+    </div>
+
+    <div class="frame-block frame-a">
+      <div class="frame-header">
+        <span>FuncA's stack frame</span>
+      </div>
+      <div class="frame-cell">
+        <span>Saved FP_main</span>
+        <span class="frame-cell-offset">(save caller's frame pointer)</span>
+      </div>
+      <div class="frame-cell">
+        <span>Saved LR (return to main)</span>
+        <span class="frame-cell-offset"></span>
+      </div>
+      <div class="frame-cell">
+        <span>int a = 3</span>
+        <span class="frame-cell-offset">
+          [fp_A - 4] &nbsp;<span class="frame-access">← normal memory read/write</span>
+        </span>
+      </div>
+      <div class="frame-cell">
+        <span>int b = 5</span>
+        <span class="frame-cell-offset">[fp_A - 8]</span>
+      </div>
+      <div class="frame-cell" style="border-top: 2px solid #2e7d32;">
+        <span style="color:#555;">↕ FP_A (frame pointer)</span>
+        <span class="fp-marker">FP_A →</span>
+      </div>
+    </div>
+
+    <div class="frame-block frame-b">
+      <div class="frame-header">
+        <span>FuncB's stack frame (currently executing)</span>
+      </div>
+      <div class="frame-cell">
+        <span>Saved FP_A</span>
+        <span class="frame-cell-offset">(save caller's frame pointer)</span>
+      </div>
+      <div class="frame-cell">
+        <span>Saved LR (return to FuncA)</span>
+        <span class="frame-cell-offset"></span>
+      </div>
+      <div class="frame-cell">
+        <span>int p = 7</span>
+        <span class="frame-cell-offset">
+          [fp_B - 4] &nbsp;<span class="frame-access">← normal memory read/write</span>
+        </span>
+      </div>
+      <div class="frame-cell" style="border-top: 2px solid #e65100;">
+        <span style="color:#555;">↕ FP_B (frame pointer)</span>
+        <span class="fp-marker">FP_B →</span>
+      </div>
+    </div>
+
+    <div class="sp-row">▼ SP (pointing to the bottom of FuncB's frame)</div>
+    <div class="addr-hint">Low address ▼</div>
+  </div>
+
+  <div class="key">
+    <strong>"Stack = push/pop only" is a misconception</strong><br>
+    Many beginners think that stack memory can only be accessed via PUSH and POP.
+    In reality, two separate rules apply:
+    <ul style="margin: 0.5rem 0 0;">
+      <li><strong>Between frames:</strong> frames are stacked and released in LIFO order</li>
+      <li><strong>Within a frame:</strong> data is accessed by <em>ordinary memory reads/writes</em> (random access is fine)</li>
+    </ul>
+    <br>
+    Local variables are accessed freely by offset from the frame pointer: <code>[fp - 4]</code>, <code>[fp - 8]</code>, etc.
+    PUSH/POP is only used for frame setup/teardown and saving/restoring registers.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    The colored left border on each stack cell indicates which frame it belongs to.
+    Watch main's frame (purple) and the child function's frame (green) stack up.
+    The FrameViz panel also shows this visually.
+  </div>
+
+  <!-- 6 -->
+  <h2 id="s6">6. Allocating and Releasing Local Variables</h2>
+
+  <p>Space for local variables is reserved simply by moving SP. No system call like <code>malloc</code> is needed — this is very fast.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — allocating locals</h4>
+      <pre><code>push {fp, lr}       <span class="comment">; save FP and LR</span>
+add  fp, sp, #4     <span class="comment">; set frame pointer</span>
+sub  sp, sp, #8     <span class="comment">; reserve 8 bytes for locals</span>
+
+<span class="comment">; ... function body ...</span>
+
+sub  sp, fp, #4     <span class="comment">; restore SP (release locals)</span>
+pop  {fp, pc}       <span class="comment">; restore FP, PC = return address</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — allocating locals</h4>
+      <pre><code>push rbp             <span class="comment">; save RBP</span>
+mov  rbp, rsp        <span class="comment">; set frame pointer</span>
+sub  rsp, 16         <span class="comment">; reserve 16 bytes for locals</span>
+
+<span class="comment">; ... function body ...</span>
+
+leave                <span class="comment">; mov rsp, rbp; pop rbp</span>
+ret                  <span class="comment">; jump to return address</span></code></pre>
+    </div>
+  </div>
+
+  <h3>"Releasing" just means moving SP back</h3>
+
+  <p>Releasing stack space means <strong>moving SP back to where it was</strong>. The memory is not cleared.</p>
+
+  <pre><code>Allocate: sub rsp, 16  <span class="comment">; RSP decreases → that region is "in use"</span>
+Release:  add rsp, 16  <span class="comment">; RSP increases → that region is "available" again</span>
+                       <span class="comment">; ※ data in memory remains until overwritten</span></code></pre>
+
+  <div class="key">
+    <strong>Dangling pointer warning</strong><br>
+    Never return the address of a local variable from a function.
+    Once the function returns and SP is restored, that memory becomes "free".
+    The next function call will overwrite it, and your returned pointer will point to garbage (undefined behavior).
+    <pre style="margin-top:0.5rem;"><code>int* bad() {
+    int x = 42;
+    return &amp;x;  <span class="comment">// danger: garbage value after function returns</span>
+}</code></pre>
+  </div>
+
+  <h3>Accessing local variables</h3>
+
+  <p>Variables in the allocated region are accessed via the frame pointer (FP / RBP) plus an offset.</p>
+
+  <pre><code><span class="comment">; Storing local variable x = 3 on the stack (x86-64)</span>
+mov  DWORD PTR [rbp-4], 3   <span class="comment">; x is placed at rbp - 4</span>
+
+<span class="comment">; Storing local variable y = 5</span>
+mov  DWORD PTR [rbp-8], 5   <span class="comment">; y is placed at rbp - 8</span></code></pre>
+
+  <div class="key">
+    <strong>ARM <code>-mthumb</code> / optimization note</strong><br>
+    With ARM GCC using <code>-mthumb</code> or <code>-O1</code> and above, the compiler may omit the frame pointer
+    and access local variables relative to the stack pointer (SP) instead.
+    You may see <code>[sp, #N]</code> in GCC output.
+    AsmWalker samples compile at <code>-O0</code> (no optimization), so the frame pointer form is used.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    After executing <code>mov DWORD PTR [rbp-4], 3</code>,
+    check the Stack panel — the cell at <code>rbp-4</code> now holds the value <code>3</code>.
+  </div>
+
+  <!-- 7 -->
+  <h2 id="s7">7. Stack Overflow</h2>
+
+  <p>The stack has a size limit. If deep recursion or very large local variables exhaust the stack, a <strong>stack overflow</strong> occurs and the program crashes.</p>
+
+  <pre><code><span class="comment">// Example of excessive recursion (stack overflow immediately)</span>
+void infinite(void) {
+    int buf[1024];    <span class="comment">// allocate 4 KB on stack every call</span>
+    infinite();       <span class="comment">// never returns → SP decreases without bound</span>
+}</code></pre>
+
+  <p>Embedded systems like ARM Cortex-M sometimes have only a few KB of stack, so deep recursion and large local arrays must be handled carefully.</p>
+
+  <div class="key">
+    <strong>Note about AsmWalker</strong><br>
+    AsmWalker cuts off tracing after 200–500 steps.
+    Infinite recursion produces a "maximum steps exceeded" error rather than a true stack overflow,
+    but it serves as an infinite-loop detector.
+  </div>
+
+  <!-- 8 -->
+  <h2 id="s8">8. Summary</h2>
+
+  <table>
+    <thead>
+      <tr><th>Concept</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Stack direction</td><td>High address → low address (SP decreases as the stack fills)</td></tr>
+      <tr><td>PUSH</td><td>SP -= size → write value to [SP]</td></tr>
+      <tr><td>POP</td><td>Read value from [SP] → SP += size</td></tr>
+      <tr><td>Stack frame</td><td>The section of stack used by one function; allocated on call, released on return</td></tr>
+      <tr><td>"Release" meaning</td><td>Only moves SP back — memory is not cleared</td></tr>
+      <tr><td>Local variables</td><td>Accessed via FP (or SP) ± offset</td></tr>
+      <tr><td>Stack overflow</td><td>SP crosses the stack boundary → crash</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    AsmWalker Guide
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/en/asm-reading.html">← How to Read Assembly</a></span>
+      <a href="/about.en.html#guides" class="guide-nav-center">Guide index</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/en/function-call.html">How Function Calls Work →</a></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Machine Code, Assembly, and the PC — AsmWalker Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    .memory-diagram {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.85rem;
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 0.6rem 1.2rem;
+      line-height: 1.8;
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .memory-diagram th, .memory-diagram td {
+      padding: 0.15rem 1.2rem 0.15rem 0;
+      vertical-align: top;
+      border: none;
+      white-space: nowrap;
+    }
+    .memory-diagram th:first-child, .memory-diagram td:first-child {
+      padding-left: 0.8rem;
+    }
+    .memory-diagram thead tr { border-bottom: 1px solid #ddd; }
+    .memory-diagram .addr  { color: #888; }
+    .memory-diagram .bytes { color: #0066cc; font-weight: 600; }
+    .memory-diagram .asm   { color: #2e7d32; }
+    .memory-diagram .note-col { color: #555; }
+    .memory-diagram .pc-row td { background: #fff3e0; }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+<h1>Machine Code, Assembly, and the PC</h1>
+  <p>When we write programs, we use human-readable languages like C or Python. But what the CPU actually reads is a sequence of numbers called <strong>machine code</strong>. This page explains what machine code is, how it maps to assembly, and the role of the <strong>Program Counter (PC)</strong> — the register that controls which instruction the CPU executes next.</p>
+
+  <div class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#machine-code">What is Machine Code?</a></li>
+      <li><a href="#assembly">Assembly is Another Name for Machine Code</a></li>
+      <li><a href="#encoding">A Peek at Instruction Encoding</a></li>
+      <li><a href="#pc">The Role of the Program Counter (PC)</a></li>
+      <li><a href="#pc-advance">How the PC Advances</a></li>
+      <li><a href="#jump">Branch Instructions and PC Rewriting</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="machine-code">1. What is Machine Code?</h2>
+
+  <p>The CPU reads <strong>instructions</strong> from memory and executes them. Each instruction is represented as an <strong>integer value (a sequence of bytes)</strong> — this is called <strong>machine code</strong>.</p>
+
+  <p>For example, compiling this C code:</p>
+  <pre><code>int a = 3 + 5;</code></pre>
+
+  <p>writes the following byte sequence into memory (for ARM Cortex-M):</p>
+
+  <table class="memory-diagram">
+    <thead>
+      <tr><th class="addr">Address</th><th class="bytes">Bytes (hex)</th><th class="asm">Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="addr">0x08000000</td><td class="bytes">03 20</td><td class="asm">MOV r0, #3</td></tr>
+      <tr><td class="addr">0x08000002</td><td class="bytes">05 21</td><td class="asm">MOV r1, #5</td></tr>
+      <tr><td class="addr">0x08000004</td><td class="bytes">08 18</td><td class="asm">ADD r0, r1, r0</td></tr>
+    </tbody>
+  </table>
+
+  <p>The 2-byte sequence <code>03 20</code> is the CPU's encoding of "put the value 3 into register r0".</p>
+
+  <div class="key">
+    <strong>Machine code = the only language a CPU understands:</strong><br>
+    A CPU only deals with ON/OFF electrical signals (0s and 1s). Machine code is those 0s and 1s written in hexadecimal.
+    High-level languages like C exist for humans — they must ultimately be translated into this byte sequence before the CPU can execute them.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="assembly">2. Assembly is Another Name for Machine Code</h2>
+
+  <p>Reading and writing raw byte sequences is extremely difficult for humans. So each instruction was given a human-memorable name called a <strong>mnemonic</strong>, and that notation is called <strong>assembly language</strong>.</p>
+
+  <p><strong>Machine code and assembly have a 1-to-1 correspondence.</strong></p>
+
+  <table>
+    <thead>
+      <tr><th>Machine code (hex)</th><th>Assembly instruction</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>03 20</code></td><td><code>MOV r0, #3</code></td><td>r0 ← 3</td></tr>
+      <tr><td><code>05 21</code></td><td><code>MOV r1, #5</code></td><td>r1 ← 5</td></tr>
+      <tr><td><code>08 18</code></td><td><code>ADD r0, r1, r0</code></td><td>r0 ← r1 + r0</td></tr>
+      <tr><td><code>70 47</code></td><td><code>BX LR</code></td><td>PC ← LR (return from function)</td></tr>
+    </tbody>
+  </table>
+
+  <p>Converting an assembly source file (<code>.s</code>) into bytes is called <strong>assembling</strong>. Converting bytes back into mnemonics is called <strong>disassembling</strong>.</p>
+
+  <div class="key">
+    <strong>C → Assembly → Machine code pipeline:</strong><br>
+    <ol style="margin:0.5rem 0 0;">
+      <li><strong>Compile</strong> C code to assembly (GCC's job)</li>
+      <li><strong>Assemble</strong> assembly into bytes (the assembler's job)</li>
+      <li>The resulting <strong>executable</strong> (ELF / EXE, etc.) is complete</li>
+    </ol>
+    AsmWalker uses the Godbolt API to perform steps 1 and 2 automatically, then lets you step through the resulting assembly.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="encoding">3. A Peek at Instruction Encoding</h2>
+
+  <p>Machine code bytes pack the instruction type, target registers, and immediate values into a fixed bit format.</p>
+
+  <h3>ARM Thumb example: <code>MOV r0, #3</code></h3>
+
+  <pre><code>2 bytes (16-bit Thumb): 0x2003
+
+Bit representation:  0 0 1 0 0  0 0 0  0 0 0 0 0 0 1 1
+                     ─────────  ─────  ───────────────
+                     opcode     Rd=r0  immediate = 3
+                     MOV imm</code></pre>
+
+  <p>The CPU receives this 16-bit sequence and interprets it as "store the value 3 in r0". The instruction type (opcode), destination register (Rd), and constant (immediate) are all packed into a single byte sequence.</p>
+
+  <h3>x86-64 example: <code>MOV eax, 3</code></h3>
+
+  <pre><code>5 bytes: B8 03 00 00 00
+
+B8          = opcode (MOV eax, imm32)
+03 00 00 00 = immediate value 3 (little-endian, 32-bit)</code></pre>
+
+  <p>x86 instruction lengths vary per instruction (1–15 bytes). ARM Thumb uses mainly 2-byte or 4-byte instructions.</p>
+
+  <div class="note">
+    <strong>Why this matters:</strong><br>
+    Looking at the byte sequence makes it natural to understand why the PC advances by 2, then 4.
+    Because each instruction is a fixed number of bytes, advancing the PC by the instruction length reaches the next instruction exactly.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="pc">4. The Role of the Program Counter (PC)</h2>
+
+  <p>The CPU must always know <strong>which instruction to execute next</strong>. The dedicated register that holds this information is the <strong>Program Counter (PC)</strong>.</p>
+
+  <ul>
+    <li>In ARM it is called <strong>r15 (PC)</strong></li>
+    <li>In x86-64 it is called <strong>RIP (Instruction Pointer)</strong></li>
+  </ul>
+
+  <p>The PC holds the memory address of the next instruction to execute. The CPU repeats this cycle:</p>
+
+  <ol>
+    <li>Fetch the machine code instruction at the address in PC</li>
+    <li>Decode (interpret) the instruction</li>
+    <li>Execute the instruction (update registers, memory, etc.)</li>
+    <li>Advance the PC to the address of the next instruction</li>
+    <li>Repeat from step 1</li>
+  </ol>
+
+  <p>This loop is called the <strong>Fetch-Decode-Execute cycle</strong>.</p>
+
+  <table class="memory-diagram">
+    <thead>
+      <tr><th class="addr">Address</th><th class="bytes">Machine code</th><th class="asm">Assembly</th><th></th></tr>
+    </thead>
+    <tbody>
+      <tr class="pc-row"><td class="addr">0x08000000</td><td class="bytes">03 20</td><td class="asm">MOV r0, #3</td><td class="note-col">← PC = 0x08000000 (executing this)</td></tr>
+      <tr><td class="addr">0x08000002</td><td class="bytes">05 21</td><td class="asm">MOV r1, #5</td><td></td></tr>
+      <tr><td class="addr">0x08000004</td><td class="bytes">08 18</td><td class="asm">ADD r0, r1, r0</td><td></td></tr>
+      <tr><td class="addr">0x08000006</td><td class="bytes">70 47</td><td class="asm">BX LR</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <p>When PC points to <code>0x08000000</code>, the CPU reads <code>03 20</code> (= <code>MOV r0, #3</code>), executes it, and advances PC to <code>0x08000002</code>.</p>
+
+  <div class="key">
+    <strong>What does "PC points to an instruction" mean?</strong><br>
+    A program exists in memory as a list of instructions laid out sequentially.
+    The PC is like a line number or cursor — it tells the CPU where it is in that list.
+    The CPU reads and executes the instruction at PC, then normally advances PC to the next one.
+    Certain instructions, however, forcibly write a completely different address into PC.
+    That is the essence of branches and function calls.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="pc-advance">5. How the PC Advances</h2>
+
+  <p>When an instruction executes, the CPU advances PC by the byte length of that instruction.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM Thumb-2 (mix of 2-byte and 4-byte)</h4>
+      <pre><code>PC = 0x08000000
+<span class="comment">; Execute PUSH {r7, lr} (2 bytes)</span>
+PC = 0x08000000 + 2 = 0x08000002
+<span class="comment">; Execute MOV r0, #3 (2 bytes)</span>
+PC = 0x08000002 + 2 = 0x08000004
+<span class="comment">; Execute BL add (4 bytes)</span>
+PC = 0x08000004 + 4 = 0x08000008</code></pre>
+      <p style="font-size:0.87rem; margin-top:0.5rem; color:#555;">Simple instructions are 2 bytes; long-range jumps like BL are 4 bytes.</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 (variable length: 1–15 bytes)</h4>
+      <pre><code>PC = 0x401000
+<span class="comment">; Execute push rbp (1 byte)</span>
+PC = 0x401000 + 1 = 0x401001
+<span class="comment">; Execute mov rbp, rsp (3 bytes)</span>
+PC = 0x401001 + 3 = 0x401004
+<span class="comment">; Execute sub rsp, 16 (4 bytes)</span>
+PC = 0x401004 + 4 = 0x401008</code></pre>
+      <p style="font-size:0.87rem; margin-top:0.5rem; color:#555;">Lengths vary widely per instruction. The CPU determines the length during decoding.</p>
+    </div>
+  </div>
+
+  <div class="key" style="margin-top: 1.5rem;">
+    <strong>⚠ AsmWalker treats all instructions as 4 bytes wide</strong><br><br>
+    The examples above show PC advancing by actual instruction sizes. AsmWalker works differently.<br><br>
+    Obtaining real instruction byte sizes would require encoding and disassembling each instruction.
+    AsmWalker <strong>prioritizes ease of learning</strong> and assigns all instructions — whether a 2-byte ARM Thumb instruction or a variable-length x86 instruction — a <strong>fixed 4-byte virtual address</strong>.<br><br>
+    As a result, ARM sample addresses always increase as
+    <code>0x08000000 → 0x08000004 → 0x08000008 …</code> (steps of 4).
+    This differs from real disassembly output (which mixes steps of 2 and 4),
+    but it does not affect learning the fundamental behavior of the PC pointing to the next instruction.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="jump">6. Branch Instructions and PC Rewriting</h2>
+
+  <p>With ordinary instructions, the PC simply advances by the instruction length. But <code>if</code> statements and function calls require forcing the PC to jump to a specific address. This is what <strong>branch instructions</strong> do.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM branch instructions</h4>
+      <table style="margin:0.5rem 0; font-size:0.88rem;">
+        <thead><tr><th>Instruction</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>B label</code></td><td>PC ← address of label (unconditional)</td></tr>
+          <tr><td><code>BEQ label</code></td><td>If Z=1: PC ← address of label</td></tr>
+          <tr><td><code>BL func</code></td><td>LR ← PC+4, PC ← func (call)</td></tr>
+          <tr><td><code>BX LR</code></td><td>PC ← LR (return from function)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 branch instructions</h4>
+      <table style="margin:0.5rem 0; font-size:0.88rem;">
+        <thead><tr><th>Instruction</th><th>Effect</th></tr></thead>
+        <tbody>
+          <tr><td><code>JMP label</code></td><td>RIP ← address of label (unconditional)</td></tr>
+          <tr><td><code>JE label</code></td><td>If ZF=1: RIP ← address of label</td></tr>
+          <tr><td><code>CALL func</code></td><td>[RSP] ← RIP+?, RSP-=8, RIP ← func</td></tr>
+          <tr><td><code>RET</code></td><td>RIP ← [RSP], RSP+=8 (return)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <p>When a branch instruction executes, the PC jumps to a completely different location. Conditional branches only rewrite the PC when a certain condition holds, so the same program can take different paths depending on input.</p>
+
+  <h3>Concrete example: how an if statement becomes assembly</h3>
+
+  <pre><code>int a = 5;
+int b = 3;
+if (a > b) {
+    a = a - b;  // this line executes
+}</code></pre>
+
+  <p>ARM Cortex-M assembly output (simplified):</p>
+
+  <pre><code>        mov  r0, #5         <span class="comment">; a = 5</span>
+        mov  r1, #3         <span class="comment">; b = 3</span>
+        cmp  r0, r1         <span class="comment">; compare a and b (updates flags)</span>
+        ble  .end           <span class="comment">; if a &lt;= b, jump to .end (rewrites PC)</span>
+        sub  r0, r0, r1     <span class="comment">; a = a - b (only runs when a &gt; b)</span>
+.end:</code></pre>
+
+  <p>The <code>CMP</code> instruction updates internal flags (N/Z/C/V), and <code>BLE</code> reads those flags to decide whether to rewrite the PC. If the condition does not hold, PC advances normally to the next instruction (<code>SUB</code>).</p>
+
+  <div class="key">
+    <strong>Summary: PC and assembly</strong>
+    <ul style="margin:0.5rem 0 0;">
+      <li>Machine code is a byte sequence stored in memory. Assembly is its human-readable form.</li>
+      <li>The PC (Program Counter) is a register holding the address of the next instruction.</li>
+      <li>For ordinary instructions, the PC advances automatically by the instruction's byte length.</li>
+      <li>Branch instructions (B/BL/BX/JMP/CALL/RET) forcibly write a new address into the PC.</li>
+      <li>All conditional branches, loops, function calls, and returns are implemented by rewriting the PC.</li>
+    </ul>
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    The Special Registers panel (bottom right) shows the current value of PC (ARM) or RIP (x86) in real time.
+    Watch the address change with every step.
+    At a function call (<code>BL</code> / <code>CALL</code>), the PC jumps to a completely different address — you can see this live.
+  </div>
+
+  <footer>
+    AsmWalker Guide
+    <nav class="guide-nav">
+      <span class="guide-nav-side"></span>
+      <a href="/about.en.html#guides" class="guide-nav-center">Guide index</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/en/asm-reading.html">How to Read Assembly →</a></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

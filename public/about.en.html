@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About AsmWalker</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.7;
+      color: #222;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.2rem; margin-top: 2.5rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.5rem; color: #444; }
+    p  { margin: 0.6rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+    pre code { background: none; padding: 0; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; }
+    th { background: #f0f0f0; }
+    .note {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+  </style>
+</head>
+<body>
+
+<h1>About AsmWalker</h1>
+  <p>AsmWalker is a browser-based learning tool for exploring C-to-assembly correspondence, one instruction at a time.</p>
+
+  <h2>What You Can Do</h2>
+  <ul>
+    <li>Compile C source code right in the browser and step through the generated assembly</li>
+    <li>View each instruction's meaning, format, and execution effect in the detail panel</li>
+    <li>Visualize register and stack changes in real time</li>
+    <li>See function calls and return values displayed according to the ABI (calling convention)</li>
+  </ul>
+
+  <h2>Supported Architectures</h2>
+  <table>
+    <thead>
+      <tr><th>Architecture</th><th>Compiler</th><th>Syntax</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ARM Cortex-M</td><td>ARM GCC 11.2.1 / 13.2.0 / 14.3.0</td><td>ARM syntax</td></tr>
+      <tr><td>x86-64</td><td>x86-64 GCC 14.2.0</td><td>Intel syntax (<code>-masm=intel</code>)</td></tr>
+    </tbody>
+  </table>
+
+  <h2>How Compilation Works</h2>
+  <p>
+    Compilation uses the public API of <a href="https://godbolt.org" target="_blank" rel="noopener">Compiler Explorer (Godbolt)</a>.
+    The C code you type in the editor is sent from your browser to the Godbolt API,
+    and the returned assembly text is parsed and executed inside the tool.
+  </p>
+  <p>The Godbolt API returns pure assembly text. It does not include address information.</p>
+
+  <h2>How Addresses Are Displayed</h2>
+  <p>
+    Addresses like <code>0x401000</code> shown in the Assembly panel are not assigned by Godbolt —
+    they are <strong>virtual addresses generated inside the tool</strong>.
+  </p>
+
+  <h3>Assignment Method</h3>
+  <p>Each address is computed from the architecture's base address plus the instruction index multiplied by a fixed size:</p>
+  <pre><code>virtual address = base address + instruction index × 4</code></pre>
+  <table>
+    <thead>
+      <tr><th>Architecture</th><th>Base address</th><th>Example (first instruction)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>x86-64</td><td><code>0x401000</code></td><td>instr 0=0x401000, instr 1=0x401004 …</td></tr>
+      <tr><td>ARM Cortex-M</td><td><code>0x08000000</code></td><td>instr 0=0x08000000, instr 1=0x08000004 …</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Why "Fixed 4 Bytes"?</h3>
+  <p>Actual instruction sizes vary by architecture:</p>
+  <table>
+    <thead>
+      <tr><th>Architecture</th><th>Real instruction size</th><th>How this tool handles it</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>x86-64</td><td>1–15 bytes (variable)</td><td>Fixed 4 bytes</td></tr>
+      <tr><td>ARM Thumb2</td><td>2 or 4 bytes (mixed)</td><td>Fixed 4 bytes</td></tr>
+    </tbody>
+  </table>
+  <div class="note">
+    Computing the real byte size of each instruction would require encoding and disassembling every instruction.
+    This tool uses a fixed 4-byte virtual stride to prioritize ease of learning.
+    The step-execution engine keeps the return address of a <code>call</code> instruction consistent
+    with the displayed address of the following instruction.
+  </div>
+
+  <h2>How Step Execution Works</h2>
+  <p>
+    The tool parses the assembly text received from Godbolt with its own parser
+    and generates an array of snapshots — instruction sequences paired with virtual machine state
+    (registers, stack, flags) at each step.
+    Stepping forward or backward simply references the next or previous snapshot in this array;
+    no re-execution takes place.
+  </p>
+  <p>Supported instructions (x86-64): <code>MOV / LEA / PUSH / POP / ADD / SUB / IMUL / IDIV / AND / OR / XOR / SHL / SHR / CMP / TEST / JMP / Jcc / CALL / RET / LEAVE</code> and more</p>
+  <p>Supported instructions (ARM): <code>MOV / LDR / STR / ADD / SUB / MUL / CMP / B / BL / BX / PUSH / POP / LSL / LSR</code> and more</p>
+
+  <h2 id="guides">Learning Guides</h2>
+  <p>Explanatory pages are available to help you understand how assembly works at a deeper level.</p>
+  <table>
+    <thead>
+      <tr><th>Guide</th><th>Contents</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><a href="/guide/en/machine-code.html">Machine Code, Assembly, and the PC</a></td><td>What machine code is, its 1-to-1 correspondence with assembly, the program counter's role, and branch instructions</td></tr>
+      <tr><td><a href="/guide/en/asm-reading.html">How to Read Assembly</a></td><td>Reading common instructions: MOV / ADD / LDR / CMP / PUSH and their syntax</td></tr>
+      <tr><td><a href="/guide/en/stack.html">How the Stack Works</a></td><td>PUSH/POP internals, the stack pointer, and how local variables are allocated and freed</td></tr>
+      <tr><td><a href="/guide/en/function-call.html">How Function Calls Work</a></td><td>Passing arguments, return addresses, stack frames, and returning values</td></tr>
+      <tr><td><a href="/guide/en/branch.html">Conditional Branches and Flag Registers</a></td><td>Z/N/C/V flags, CMP/TEST, if-else, and loop translation patterns</td></tr>
+      <tr><td><a href="/guide/en/pointer.html">Pointers and Assembly</a></td><td>What C pointers look like in assembly — dereferencing, array access</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Tech Stack</h2>
+  <table>
+    <tbody>
+      <tr><td>Frontend</td><td>Vue 3 + TypeScript + Tailwind CSS</td></tr>
+      <tr><td>i18n</td><td>vue-i18n v11</td></tr>
+      <tr><td>Editor</td><td>CodeMirror 6</td></tr>
+      <tr><td>Build tool</td><td>Vite</td></tr>
+      <tr><td>Compilation API</td><td>Godbolt Compiler Explorer API</td></tr>
+      <tr><td>Hosting</td><td>Vercel</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    AsmWalker — Assembly Learning Tool
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How to Read Assembly — AsmWalker Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+    .hl { color: #c0392b; font-weight: bold; }
+    .hl2 { color: #2471a3; font-weight: bold; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    .instr-anatomy {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 1.1rem;
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1.2rem 1.5rem;
+      margin: 1rem 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      flex-wrap: wrap;
+    }
+    .ia-part { display: flex; flex-direction: column; align-items: center; }
+    .ia-code { padding: 0.2em 0.4em; border-radius: 3px; }
+    .ia-label { font-size: 0.72rem; color: #666; font-family: sans-serif; margin-top: 0.3em; white-space: nowrap; }
+    .ia-sep { padding: 0.2em 0.2em; color: #aaa; align-self: flex-start; margin-top: 0.2em; }
+    .ia-mnemonic { background: #fde8e8; color: #c0392b; }
+    .ia-dest     { background: #dceefb; color: #1a5276; }
+    .ia-src      { background: #d5f5e3; color: #1e8449; }
+    .ia-imm      { background: #fef9e7; color: #7d6608; }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+<h1>How to Read Assembly</h1>
+  <p>Assembly can look intimidating at first, but once you grasp the basic rules it becomes readable. Let's go through the most common instructions one by one, comparing them to their C equivalents.</p>
+
+  <div class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#structure">Basic Instruction Structure</a></li>
+      <li><a href="#direction">Reading Direction: Left is Destination, Right is Source</a></li>
+      <li><a href="#registers">What Are Registers?</a></li>
+      <li><a href="#mov">MOV — Moving Values</a></li>
+      <li><a href="#arith">ADD / SUB — Addition and Subtraction</a></li>
+      <li><a href="#memory">Memory Access — LDR/STR (ARM) and [ ] (x86)</a></li>
+      <li><a href="#cmp">CMP — Compare</a></li>
+      <li><a href="#push-pop">PUSH / POP — Stack Operations</a></li>
+      <li><a href="#tips">Tips for Reading Assembly</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="structure">1. Basic Instruction Structure</h2>
+
+  <p>Each line of assembly consists of a <strong>mnemonic (instruction name)</strong> and <strong>operands (targets)</strong>.</p>
+
+  <div class="instr-anatomy">
+    <div class="ia-part">
+      <span class="ia-code ia-mnemonic">MOV</span>
+      <span class="ia-label">Mnemonic<br>(what to do)</span>
+    </div>
+    <span class="ia-sep">&nbsp;</span>
+    <div class="ia-part">
+      <span class="ia-code ia-dest">rax</span>
+      <span class="ia-label">1st operand<br>(destination)</span>
+    </div>
+    <span class="ia-sep">,&nbsp;</span>
+    <div class="ia-part">
+      <span class="ia-code ia-imm">5</span>
+      <span class="ia-label">2nd operand<br>(source)</span>
+    </div>
+  </div>
+
+  <p>Mnemonics are abbreviations of English words. <code>MOV</code> = Move, <code>ADD</code> = Add, <code>STR</code> = Store Register, etc.</p>
+
+  <div class="key">
+    <strong>Tip for remembering mnemonics:</strong><br>
+    Think of the full English word: <code>MOV</code>=Move, <code>CMP</code>=Compare, <code>LDR</code>=Load Register, <code>STR</code>=Store Register, <code>BL</code>=Branch with Link (subroutine call).
+  </div>
+
+  <h3>Instruction length and address display</h3>
+
+  <p>Each instruction occupies multiple bytes in memory. The byte count varies by instruction and architecture.</p>
+
+  <table>
+    <thead>
+      <tr><th>Architecture</th><th>Actual instruction length</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ARM Thumb / Thumb-2</td><td>Mix of 2-byte and 4-byte instructions</td></tr>
+      <tr><td>x86-64</td><td>1–15 bytes (variable per instruction)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>AsmWalker treats all instructions as 4 bytes wide:</strong><br>
+    The addresses shown in the assembly panel are virtual addresses chosen for ease of learning, not real instruction sizes.
+    See <a href="/guide/en/machine-code.html#pc-advance">Machine Code, Assembly, and the PC — How the PC Advances</a> for details.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="direction">2. Reading Direction: Left is Destination, Right is Source</h2>
+
+  <p>Both architectures supported by this tool use <strong>destination ← source</strong> (left ← right) order.</p>
+
+  <table>
+    <thead>
+      <tr><th>Architecture</th><th>Example</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>x86-64 (Intel syntax)</td>
+        <td><code>mov rax, 5</code></td>
+        <td>Store 5 into rax</td>
+      </tr>
+      <tr>
+        <td>ARM</td>
+        <td><code>mov r0, #5</code></td>
+        <td>Store 5 into r0</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>Difference from AT&amp;T syntax (GCC default on Linux):</strong><br>
+    Running <code>gcc -S</code> on Linux produces AT&amp;T syntax where the order is reversed (right → left).
+    <code>movl $5, %eax</code> means the same thing but reads in the opposite direction.
+    AsmWalker uses Intel syntax (<code>-masm=intel</code>), so left is always the destination.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="registers">3. What Are Registers?</h2>
+
+  <p>Registers are ultra-fast variables inside the CPU itself. While C variables live in memory, registers sit on the CPU chip and are orders of magnitude faster to access.</p>
+
+  <h3>Main x86-64 registers</h3>
+  <table>
+    <thead>
+      <tr><th>64-bit</th><th>32-bit</th><th>16-bit</th><th>8-bit</th><th>Common use</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>rax</code></td><td><code>eax</code></td><td><code>ax</code></td><td><code>al</code></td><td>Arithmetic / function return value</td></tr>
+      <tr><td><code>rbx</code></td><td><code>ebx</code></td><td><code>bx</code></td><td><code>bl</code></td><td>General purpose</td></tr>
+      <tr><td><code>rcx</code></td><td><code>ecx</code></td><td><code>cx</code></td><td><code>cl</code></td><td>Counter / 4th argument</td></tr>
+      <tr><td><code>rdx</code></td><td><code>edx</code></td><td><code>dx</code></td><td><code>dl</code></td><td>Multiply/divide / 3rd argument</td></tr>
+      <tr><td><code>rdi</code></td><td><code>edi</code></td><td><code>di</code></td><td><code>dil</code></td><td>1st argument</td></tr>
+      <tr><td><code>rsi</code></td><td><code>esi</code></td><td><code>si</code></td><td><code>sil</code></td><td>2nd argument</td></tr>
+      <tr><td><code>rsp</code></td><td><code>esp</code></td><td>—</td><td>—</td><td>Stack pointer</td></tr>
+      <tr><td><code>rbp</code></td><td><code>ebp</code></td><td>—</td><td>—</td><td>Frame pointer</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>eax and rax are the same register:</strong><br>
+    <code>rax</code> (64-bit) contains <code>eax</code> as its lower 32 bits, <code>ax</code> as its lower 16 bits, and <code>al</code> as its lower 8 bits.
+    When GCC handles an <code>int</code> (32-bit) value, it uses <code>eax</code>.
+    Writing to <code>eax</code> automatically zeroes the upper 32 bits of <code>rax</code>.
+  </div>
+
+  <h3>Main ARM registers</h3>
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Alias</th><th>Common use</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>r0</code></td><td>—</td><td>1st argument / function return value</td></tr>
+      <tr><td><code>r1</code></td><td>—</td><td>2nd argument</td></tr>
+      <tr><td><code>r2</code></td><td>—</td><td>3rd argument</td></tr>
+      <tr><td><code>r3</code></td><td>—</td><td>4th argument</td></tr>
+      <tr><td><code>r4–r11</code></td><td>—</td><td>General purpose (callee-saved)</td></tr>
+      <tr><td><code>r13</code></td><td><code>sp</code></td><td>Stack pointer</td></tr>
+      <tr><td><code>r14</code></td><td><code>lr</code></td><td>Link register (return address)</td></tr>
+      <tr><td><code>r15</code></td><td><code>pc</code></td><td>Program counter</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 id="mov">4. MOV — Moving Values</h2>
+
+  <p>The most common instruction. Used for register-to-register copies, loading immediate values, and reading from / writing to memory.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>mov r0, #3       <span class="comment">; r0 = 3 (immediate)</span>
+mov r1, r0       <span class="comment">; r1 = r0 (register copy)</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">ARM prefixes immediate values with <code>#</code>.</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>mov eax, 3       <span class="comment">; eax = 3 (immediate)</span>
+mov ebx, eax     <span class="comment">; ebx = eax (register copy)</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">x86 Intel syntax does not use <code>#</code> for immediates.</p>
+    </div>
+  </div>
+
+  <p>Mapping to C:</p>
+  <pre><code>int a = 3;   →   mov eax, 3        <span class="comment">; eax corresponds to variable a</span>
+int b = a;   →   mov ebx, eax      <span class="comment">; ebx corresponds to variable b</span></code></pre>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    At a MOV step, the Instruction Detail panel shows the value flow as <code>rax ← 3</code>.
+    The changed register also lights up white in the Registers panel.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="arith">5. ADD / SUB — Addition and Subtraction</h2>
+
+  <p>Adds or subtracts two values and writes the result back to the first operand.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>add r0, r1, r2   <span class="comment">; r0 = r1 + r2</span>
+sub r0, r0, #1   <span class="comment">; r0 = r0 - 1</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">ARM often uses 3-operand form (explicit destination).</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>add eax, edx     <span class="comment">; eax = eax + edx</span>
+sub eax, 1       <span class="comment">; eax = eax - 1</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">x86 uses 2-operand form (destination = destination OP source).</p>
+    </div>
+  </div>
+
+  <pre><code><span class="comment">; C: int result = a + b;</span>
+<span class="comment">; x86-64 expansion:</span>
+mov  edx, DWORD PTR [rbp-4]   <span class="comment">; edx = a (load from memory)</span>
+mov  eax, DWORD PTR [rbp-8]   <span class="comment">; eax = b</span>
+add  eax, edx                  <span class="comment">; eax = a + b</span></code></pre>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    At an ADD step, the Instruction Detail panel shows <code>eax ← eax(3) + edx(5) = 8</code> — values before and after the operation.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="memory">6. Memory Access — LDR/STR (ARM) and [ ] (x86)</h2>
+
+  <p>Registers are temporary storage inside the CPU, so variables need to be read from / written to memory for persistence.</p>
+
+  <h3>Load (read from memory)</h3>
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — LDR (Load Register)</h4>
+      <pre><code>ldr r0, [r7, #4]  <span class="comment">; r0 = memory[r7+4]</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;"><code>[ ]</code> contains the memory address (base + offset).</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86 — MOV with [ ]</h4>
+      <pre><code>mov eax, DWORD PTR [rbp-4]
+<span class="comment">; eax = memory[rbp-4] (read 4 bytes)</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;"><code>DWORD PTR</code> specifies a 4-byte access width.</p>
+    </div>
+  </div>
+
+  <h3>Store (write to memory)</h3>
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — STR (Store Register)</h4>
+      <pre><code>str r0, [r7, #4]  <span class="comment">; memory[r7+4] = r0</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">The reverse of LDR — saves r0's value to memory.</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86 — MOV with [ ] (memory on the left)</h4>
+      <pre><code>mov DWORD PTR [rbp-4], eax
+<span class="comment">; memory[rbp-4] = eax (write 4 bytes)</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">x86 uses MOV for both loads and stores; direction is set by which side has [ ].</p>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>How to read [ ] expressions:</strong><br>
+    <code>[rbp-4]</code> or <code>[r7, #8]</code> are address calculation expressions.
+    <code>rbp-4</code> means "the address obtained by subtracting 4 from rbp's value".
+    Local variables are placed at fixed offsets from the frame pointer, so each new variable gets a new offset (-4, -8, -12…).
+  </div>
+
+  <h3>Memory size specifiers (x86)</h3>
+  <table>
+    <thead>
+      <tr><th>Specifier</th><th>Size</th><th>C type</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>BYTE PTR</code></td><td>1 byte</td><td><code>char</code></td></tr>
+      <tr><td><code>WORD PTR</code></td><td>2 bytes</td><td><code>short</code></td></tr>
+      <tr><td><code>DWORD PTR</code></td><td>4 bytes</td><td><code>int</code>, <code>float</code></td></tr>
+      <tr><td><code>QWORD PTR</code></td><td>8 bytes</td><td><code>long</code>, <code>double</code>, pointer</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    At an LDR/STR (ARM) or <code>mov [...], reg</code> (x86) step, the corresponding cell in the Stack panel highlights and you can see the value change.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="cmp">7. CMP — Compare</h2>
+
+  <p>CMP subtracts two values but <strong>does not store the result — it only updates the flags</strong>.</p>
+
+  <pre><code>cmp eax, 5    <span class="comment">; compute eax - 5 and update flags (eax unchanged)</span>
+je  .L1       <span class="comment">; if Zero Flag is set, jump to .L1 (eax == 5)</span></code></pre>
+
+  <p>The flag register records properties of the last computation result as individual bits.</p>
+
+  <table>
+    <thead>
+      <tr><th>Flag</th><th>Meaning</th><th>Set when</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Zero Flag (ZF)</td><td>Result is zero</td><td><code>cmp eax, eax</code> (equal values)</td></tr>
+      <tr><td>Negative/Sign Flag (NF/SF)</td><td>Result is negative</td><td><code>cmp eax, 10</code> where eax &lt; 10</td></tr>
+      <tr><td>Carry Flag (CF)</td><td>Unsigned overflow</td><td>Unsigned arithmetic overflow</td></tr>
+      <tr><td>Overflow Flag (OF/VF)</td><td>Signed overflow</td><td>Signed arithmetic overflow</td></tr>
+    </tbody>
+  </table>
+
+  <p>Conditional jump instructions that follow CMP read these flags.</p>
+
+  <table>
+    <thead>
+      <tr><th>x86</th><th>ARM</th><th>Condition</th><th>Flag</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>je</code></td><td><code>beq</code></td><td>Equal (==)</td><td>ZF=1</td></tr>
+      <tr><td><code>jne</code></td><td><code>bne</code></td><td>Not equal (!=)</td><td>ZF=0</td></tr>
+      <tr><td><code>jl</code></td><td><code>blt</code></td><td>Less than (&lt;)</td><td>NF≠OF</td></tr>
+      <tr><td><code>jg</code></td><td><code>bgt</code></td><td>Greater than (&gt;)</td><td>ZF=0 and NF=OF</td></tr>
+      <tr><td><code>jle</code></td><td><code>ble</code></td><td>Less or equal (&lt;=)</td><td>ZF=1 or NF≠OF</td></tr>
+      <tr><td><code>jge</code></td><td><code>bge</code></td><td>Greater or equal (&gt;=)</td><td>NF=OF</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="comment">; C: if (a > 0) { ... }</span>
+cmp eax, 0    <span class="comment">; compute flags for a - 0</span>
+jle .L_else   <span class="comment">; if a &lt;= 0, jump to else</span>
+<span class="comment">; ↑ body of if</span>
+.L_else:</code></pre>
+
+  <div class="key">
+    <strong>Reading tip:</strong><br>
+    Compilers typically generate a branch on the <strong>inverted</strong> condition of the C test — <code>if (a &gt; 0)</code> becomes "jump if NOT (a &gt; 0)".
+    Think of the jump as an escape to the else block, and the body of the if falls through naturally.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    At a CMP step, the Instruction Detail panel shows which flags were updated (ZF / NF, etc.).
+    At the next conditional branch step, you can see whether the jump actually fires.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="push-pop">8. PUSH / POP — Stack Operations</h2>
+
+  <p>PUSH pushes a value onto the stack; POP retrieves it. The stack pointer (SP / RSP) moves automatically.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>push {r7, lr}  <span class="comment">; save r7 and lr to the stack</span>
+               <span class="comment">; sp -= 8</span>
+
+pop  {r7, pc}  <span class="comment">; restore r7 and pc</span>
+               <span class="comment">; sp += 8</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">Multiple registers can be saved/restored in one instruction.</p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>push rbp       <span class="comment">; [rsp-8] = rbp, rsp -= 8</span>
+
+pop  rbp       <span class="comment">; rbp = [rsp], rsp += 8</span></code></pre>
+      <p style="font-size:0.88rem; margin-top:0.5rem;">Operates on one register at a time.</p>
+    </div>
+  </div>
+
+  <p>PUSH/POP always appear in function prologues and epilogues: "save the caller's register values so we don't clobber them, restore them before returning."</p>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    At a PUSH step, a new cell appears at the bottom of the Stack panel and SP moves down.
+    At a POP step, the cell disappears and SP moves back up.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="tips">9. Tips for Reading Assembly</h2>
+
+  <ol>
+    <li><strong>Read left → right as "put what into where"</strong> (Intel syntax / ARM both use this order)</li>
+    <li><strong><code>[ ]</code> means memory access</strong>. The expression inside is an address calculation.</li>
+    <li><strong>Mnemonics are abbreviated English words</strong>. When you see an unfamiliar instruction, expand the abbreviation (<code>MOV</code>=Move, <code>LDR</code>=Load Register).</li>
+    <li><strong>CMP is always followed by a conditional jump</strong>. The condition is often the inverse of what you expect.</li>
+    <li><strong>Function entry and exit follow a fixed pattern</strong> (prologue: <code>push rbp / mov rbp, rsp</code>; epilogue: <code>pop rbp / ret</code>).</li>
+    <li><strong>Only ARM uses <code>#</code> before immediates</strong>. Intel syntax for x86 does not.</li>
+    <li><strong>You don't have to read every line</strong>. Just trace the register that holds the variable you care about.</li>
+  </ol>
+
+  <div class="note">
+    <strong>How to use AsmWalker:</strong><br>
+    Select a sample, compile it, and step through while keeping this page open beside it.
+    Use the "Instruction Detail" panel's full instruction name and syntax format as a reference.
+  </div>
+
+  <footer>
+    AsmWalker Guide
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/en/machine-code.html">← Machine Code and the PC</a></span>
+      <a href="/about.en.html#guides" class="guide-nav-center">Guide index</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/en/stack.html">How the Stack Works →</a></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

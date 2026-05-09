@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pointers and Assembly — AsmWalker Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+    .hl  { color: #c0392b; font-weight: bold; }
+    .hl2 { color: #2471a3; font-weight: bold; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    /* Memory diagram */
+    .mem-diagram {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.85rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+    .mem-row {
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .mem-row:last-child { border-bottom: none; }
+    .mem-addr {
+      background: #f0f0f0;
+      color: #555;
+      padding: 0.35rem 0.6rem;
+      min-width: 100px;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+    }
+    .mem-name {
+      background: #f8f4ff;
+      color: #5c35a0;
+      padding: 0.35rem 0.6rem;
+      min-width: 80px;
+      display: flex;
+      align-items: center;
+      font-size: 0.82rem;
+    }
+    .mem-val {
+      flex: 1;
+      padding: 0.35rem 0.8rem;
+      display: flex;
+      align-items: center;
+    }
+    .mem-ptr  { background: #f3e8ff; }
+    .mem-data { background: #e8f4fd; }
+    .mem-arr  { background: #e8fdf0; }
+
+    .subtitle { color: #666; font-size: 0.95rem; margin-top: 0.25rem; margin-bottom: 2rem; }
+    footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+    nav.toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0 2rem; }
+    nav.toc h2 { font-size: 1rem; margin: 0 0 0.5rem; border: none; padding: 0; color: #555; }
+    nav.toc ol { margin: 0; padding-left: 1.3rem; }
+    nav.toc li { margin: 0.2rem 0; font-size: 0.93rem; }
+    nav.toc a { color: #0066cc; text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<h1>Pointers and Assembly</h1>
+  <p class="subtitle">AsmWalker Guide — What C pointers look like in assembly</p>
+
+  <div style="background:#f0f7ff; border:1px solid #b3d4f5; border-radius:8px; padding:1.2rem 1.5rem; margin:1.5rem 0; line-height:1.85;">
+    <p style="margin:0 0 0.7rem;">
+      Many people learning C hit a wall with pointers and give up.
+      Even when you understand what <code>*</code> and <code>&amp;</code> mean on paper,
+      grasping <em>why</em> they work the way they do can feel elusive.
+    </p>
+    <p style="margin:0 0 0.7rem;">
+      But once you see the assembly, the picture changes completely.
+      A pointer is nothing more than <strong>a register holding an address as a plain integer</strong>,
+      and <code>*p</code> becomes a memory-access instruction that reads or writes to that address.
+      That's all there is to it.
+      The moment an abstract pointer is tied to a concrete memory location, understanding clicks into place.
+    </p>
+    <p style="margin:0 0 0.7rem;">
+      Modern high-level languages like Python and JavaScript deliberately hide memory management in their runtimes.
+      That's a smart design choice for productivity — but it also removes every opportunity to see
+      what a program is actually doing under the hood.
+    </p>
+    <p style="margin:0;">
+      C and C++ are among the <strong>very few languages that let you touch memory directly</strong>.
+      It's no accident that operating systems, embedded firmware, game engines, and language runtimes
+      are still predominantly written in C/C++.
+      Understanding pointers and memory is a foundation of Computer Science that pays off
+      regardless of which language you work in.
+      We hope this guide is a useful step on that journey.
+    </p>
+  </div>
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#p1">A Pointer Is "a Variable That Holds an Address"</a></li>
+      <li><a href="#p2">Taking an Address (the &amp; Operator)</a></li>
+      <li><a href="#p3">Dereferencing (* Operator) and Memory-Access Instructions</a></li>
+      <li><a href="#p4">Passing Pointers to Functions</a></li>
+      <li><a href="#p5">Arrays and Pointers</a></li>
+      <li><a href="#p6">Pointer Arithmetic</a></li>
+      <li><a href="#p7">Double Pointers</a></li>
+      <li><a href="#p8">Summary</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="p1">1. A Pointer Is "a Variable That Holds an Address"</h2>
+
+  <p>
+    In C, a pointer is a variable that holds the memory address of another variable.
+    From the assembly perspective, a pointer is simply <strong>"a register containing an integer value — the address."</strong>
+    There is no special syntax; it is stored in the same registers as any other integer.
+  </p>
+
+  <pre><code><span class="comment">// C</span>
+int  x = 42;
+int* p = &amp;x;   <span class="comment">// p holds the address of x</span></code></pre>
+
+  <p>In assembly, <code>p</code> is just a register (or stack slot) that contains an address value.</p>
+
+  <!-- 2 -->
+  <h2 id="p2">2. Taking an Address (the &amp; Operator)</h2>
+
+  <p>
+    C's <code>&amp;x</code> computes "the address where x lives."
+    In assembly, this is done with an address-computation instruction (<code>lea</code> on x86, <code>add</code>/<code>sub</code> on ARM).
+  </p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — implementing &amp;x</h4>
+      <pre><code><span class="comment">; int x = 42 → placed at [fp-4]</span>
+mov  r3, #42
+str  r3, [fp, #-4]    <span class="comment">; x = 42</span>
+
+<span class="comment">; int *p = &amp;x</span>
+sub  r3, fp, #4       <span class="comment">; r3 = fp - 4 (address of x)</span>
+str  r3, [fp, #-8]    <span class="comment">; save p = &amp;x on the stack</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — implementing &amp;x</h4>
+      <pre><code><span class="comment">; int x = 42 → placed at [rbp-4]</span>
+mov  DWORD PTR [rbp-4], 42  <span class="comment">; x = 42</span>
+
+<span class="comment">; int *p = &amp;x</span>
+lea  rax, [rbp-4]           <span class="comment">; rax = rbp - 4 (address of x)</span>
+mov  QWORD PTR [rbp-16], rax <span class="comment">; save p = &amp;x on the stack</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    <code>lea</code> (Load Effective Address) computes an address and stores it in a register
+    without reading any memory — it returns the address value itself.
+    ARM's <code>sub r3, fp, #4</code> serves the same purpose.
+  </p>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    Simply taking an address doesn't show anything special in the Register panel yet.
+    When you step to an instruction that actually reads or writes via that address
+    (<code>ldr r3, [r3]</code> / <code>str r2, [r3]</code> etc.),
+    the base register in the <code>[...]</code> notation will show a purple <strong>"ptr" badge</strong>.
+    Trace the steps from address capture to dereference.
+  </div>
+
+  <!-- 3 -->
+  <h2 id="p3">3. Dereferencing (* Operator) and Memory-Access Instructions</h2>
+
+  <p>
+    C's <code>*p</code> reads or writes the memory at the address held in <code>p</code> — this is called dereferencing.
+    In assembly it appears as a <strong>memory-access instruction</strong>
+    (ARM: <code>LDR/STR</code>, x86: <code>MOV [...], ...</code>).
+  </p>
+
+  <pre><code><span class="comment">// C</span>
+int x = 42;
+int* p = &amp;x;
+int y = *p;    <span class="comment">// read the value at the address p points to → y = 42</span>
+*p = 100;      <span class="comment">// write 100 to the address p points to → x = 100</span></code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — dereferencing</h4>
+      <pre><code><span class="comment">; int y = *p</span>
+ldr  r3, [fp, #-8]    <span class="comment">; r3 = p (the address)</span>
+ldr  r3, [r3]         <span class="comment">; r3 = *p (the value at that address)</span>
+str  r3, [fp, #-12]   <span class="comment">; y = *p</span>
+
+<span class="comment">; *p = 100</span>
+ldr  r3, [fp, #-8]    <span class="comment">; r3 = p (the address)</span>
+mov  r2, #100
+str  r2, [r3]         <span class="comment">; *p = 100 (write to that address)</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — dereferencing</h4>
+      <pre><code><span class="comment">; int y = *p</span>
+mov  rax, QWORD PTR [rbp-16]  <span class="comment">; rax = p (the address)</span>
+mov  eax, DWORD PTR [rax]     <span class="comment">; eax = *p (the value at that address)</span>
+mov  DWORD PTR [rbp-20], eax  <span class="comment">; y = *p</span>
+
+<span class="comment">; *p = 100</span>
+mov  rax, QWORD PTR [rbp-16]  <span class="comment">; rax = p (the address)</span>
+mov  DWORD PTR [rax], 100     <span class="comment">; *p = 100 (write to that address)</span></code></pre>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>Notice the two memory accesses</strong><br>
+    Dereferencing always involves two steps:
+    "1st: read the pointer variable to get the address" and
+    "2nd: read or write the data at that address."
+    This double indirection is one reason pointer-heavy code can be slower than direct variable access.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    At a step like <code>ldr r3, [r3]</code> or <code>str r2, [r3]</code>
+    (x86: <code>mov eax, [rax]</code>),
+    the base register inside <code>[...]</code> in the Register panel shows a purple <strong>"ptr" badge</strong>.
+    This badge indicates that the register is being used as a pointer at this specific instruction.
+    Also check the Stack panel to see the value at the corresponding address change.
+  </div>
+
+  <!-- 4 -->
+  <h2 id="p4">4. Passing Pointers to Functions</h2>
+
+  <p>
+    When you pass a pointer as a function argument in C, assembly generates an instruction to copy the address value into an argument register.
+    Inside the function, reading or writing through that address directly modifies the caller's variable.
+    This is the true nature of "pass by reference."
+  </p>
+
+  <pre><code><span class="comment">// C</span>
+void double_it(int* p) {
+    *p = *p * 2;   <span class="comment">// modify the caller's variable</span>
+}
+
+int main(void) {
+    int x = 5;
+    double_it(&amp;x);  <span class="comment">// pass address of x → x becomes 10</span>
+}</code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — caller side</h4>
+      <pre><code><span class="comment">; calling double_it(&amp;x)</span>
+sub  r0, fp, #8    <span class="comment">; r0 = &amp;x (address as arg 1)</span>
+bl   double_it     <span class="comment">; function call</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — caller side</h4>
+      <pre><code><span class="comment">; calling double_it(&amp;x)</span>
+lea  rdi, [rbp-4]  <span class="comment">; rdi = &amp;x (address as 1st arg)</span>
+call double_it     <span class="comment">; function call</span></code></pre>
+    </div>
+  </div>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — callee (double_it)</h4>
+      <pre><code><span class="comment">; r0 = &amp;x was passed in</span>
+ldr  r3, [r0]      <span class="comment">; r3 = *p (read x's value)</span>
+mov  r2, r3, lsl #1 <span class="comment">; r2 = r3 * 2</span>
+str  r2, [r0]      <span class="comment">; *p = r2 (overwrite x)</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — callee (double_it)</h4>
+      <pre><code><span class="comment">; rdi = &amp;x was passed in</span>
+mov  eax, DWORD PTR [rdi]   <span class="comment">; eax = *p</span>
+add  eax, eax               <span class="comment">; eax *= 2</span>
+mov  DWORD PTR [rdi], eax   <span class="comment">; *p = eax (overwrite x)</span></code></pre>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    Confirm that the value of <code>x</code> in the Stack panel changes before and after the function call.
+    Just before <code>bl double_it</code> / <code>call double_it</code>, r0/rdi shows a blue <strong>"Arg 1" badge</strong>.
+    Inside the function, at <code>ldr r3, [r0]</code> / <code>mov eax, [rdi]</code>,
+    r0/rdi shows a purple <strong>"ptr" badge</strong>, confirming pointer dereferencing.
+  </div>
+
+  <!-- 5 -->
+  <h2 id="p5">5. Arrays and Pointers</h2>
+
+  <p>
+    In C, an array name behaves like a pointer to its first element.
+    In assembly, you can see the explicit calculation: "base address of array + index × element size."
+  </p>
+
+  <pre><code><span class="comment">// C</span>
+int arr[3] = {10, 20, 30};
+int v = arr[2];   <span class="comment">// read 2 * 4 = 8 bytes past the start</span></code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — array access</h4>
+      <pre><code><span class="comment">; get address of arr[0]</span>
+sub  r3, fp, #20   <span class="comment">; r3 = &amp;arr[0]</span>
+
+<span class="comment">; access arr[2] (offset = 2 * 4 = 8)</span>
+ldr  r3, [r3, #8]  <span class="comment">; r3 = arr[2]</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — array access</h4>
+      <pre><code><span class="comment">; get address of arr[0]</span>
+lea  rax, [rbp-16]          <span class="comment">; rax = &amp;arr[0]</span>
+
+<span class="comment">; access arr[2] (offset = 2 * 4 = 8)</span>
+mov  eax, DWORD PTR [rax+8] <span class="comment">; eax = arr[2]</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    When iterating an array with a loop, the index calculation (<code>index * 4</code>) may appear
+    as a shift instruction (<code>lsl #2</code>) or as SIB addressing in x86.
+  </p>
+
+  <pre><code><span class="comment">; x86-64: SIB addressing for arr[i]</span>
+mov  eax, DWORD PTR [rax + rcx*4]
+<span class="comment">;                         ↑ CPU computes index × sizeof(int) automatically</span></code></pre>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    Array-element access instructions show a green <strong>"arr" badge</strong>.
+    The Stack panel also highlights each array cell in green so you can visually track which element is being accessed.
+  </div>
+
+  <!-- 6 -->
+  <h2 id="p6">6. Pointer Arithmetic</h2>
+
+  <p>
+    Adding an integer to a pointer <strong>advances the address by that many elements</strong> (not bytes).
+    This is pointer arithmetic. In assembly, the element-size multiplication is visible directly.
+  </p>
+
+  <pre><code><span class="comment">// C</span>
+int arr[5] = {1, 2, 3, 4, 5};
+int* p = arr;      <span class="comment">// p → arr[0]</span>
+p = p + 2;         <span class="comment">// p → arr[2] (address advances by 2*4 = 8)</span>
+int v = *p;        <span class="comment">// v = 3</span></code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — pointer arithmetic</h4>
+      <pre><code><span class="comment">; p = p + 2  (int* so +8 bytes)</span>
+ldr  r3, [fp, #-8]    <span class="comment">; r3 = p</span>
+add  r3, r3, #8       <span class="comment">; r3 += 2 * sizeof(int)</span>
+str  r3, [fp, #-8]    <span class="comment">; p = r3</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — pointer arithmetic</h4>
+      <pre><code><span class="comment">; p = p + 2  (int* so +8 bytes)</span>
+mov  rax, QWORD PTR [rbp-16]  <span class="comment">; rax = p</span>
+add  rax, 8                   <span class="comment">; rax += 2 * sizeof(int)</span>
+mov  QWORD PTR [rbp-16], rax  <span class="comment">; p = rax</span></code></pre>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>Pointer arithmetic is in elements, not bytes</strong><br>
+    In C, <code>p + 1</code> means "address + sizeof(*p)", not "address + 1".
+    At the assembly level everything is always in bytes, so C's <code>p + 2</code>
+    becomes <code>+8</code> for an <code>int*</code> but only <code>+2</code> for a <code>char*</code>.
+  </div>
+
+  <!-- 7 -->
+  <h2 id="p7">7. Double Pointers</h2>
+
+  <p>
+    A double pointer (<code>int**</code>) is "a pointer to a pointer" — an address of an address.
+    In assembly it appears as three levels of memory access.
+  </p>
+
+  <pre><code><span class="comment">// C</span>
+int  x  = 42;
+int* p  = &amp;x;
+int** pp = &amp;p;
+
+int v = **pp;   <span class="comment">// follow pp → p → x</span></code></pre>
+
+  <div class="arch-box arch-x86" style="margin: 1rem 0;">
+    <h4>x86-64 — double dereference</h4>
+    <pre><code><span class="comment">; v = **pp</span>
+mov  rax, QWORD PTR [rbp-32]   <span class="comment">; rax = pp (address of address)</span>
+mov  rax, QWORD PTR [rax]      <span class="comment">; rax = *pp = p (the address)</span>
+mov  eax, DWORD PTR [rax]      <span class="comment">; eax = **pp = x (the value)</span></code></pre>
+  </div>
+
+  <p>
+    Every additional level of indirection adds one more memory access.
+    In real C programs, double pointers appear frequently: <code>char** argv</code> for argument arrays,
+    <code>Node**</code> for linked list updates, and so on.
+  </p>
+
+  <!-- 8 -->
+  <h2 id="p8">8. Summary</h2>
+
+  <table>
+    <thead>
+      <tr><th>C operation</th><th>Assembly equivalent</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>&amp;x</code> (take address)</td><td><code>lea rax, [rbp-4]</code> / <code>sub r3, fp, #4</code> — compute address</td></tr>
+      <tr><td><code>*p</code> (read)</td><td><code>mov eax, [rax]</code> / <code>ldr r3, [r3]</code> — memory load</td></tr>
+      <tr><td><code>*p = v</code> (write)</td><td><code>mov [rax], eax</code> / <code>str r3, [r3]</code> — memory store</td></tr>
+      <tr><td><code>p + n</code> (pointer arithmetic)</td><td><code>add rax, n * sizeof(*p)</code> — byte-level addition</td></tr>
+      <tr><td><code>arr[i]</code> (array access)</td><td><code>[base + i * size]</code> — base + offset calculation</td></tr>
+      <tr><td><code>**pp</code> (double dereference)</td><td>Three memory accesses: pp → p → value</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Seen through assembly, a pointer is nothing more than "a register holding an address."
+    Understanding that every dereference costs an extra memory access
+    makes both the performance implications and the common bugs far clearer.
+  </p>
+
+  <footer>
+    AsmWalker Guide
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/en/branch.html">← Conditional Branches</a></span>
+      <a href="/about.en.html#guides" class="guide-nav-center">Guide index</a>
+      <span class="guide-nav-side guide-nav-right"></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

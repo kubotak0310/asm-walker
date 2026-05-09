@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conditional Branches and Flag Registers — AsmWalker Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+    .hl  { color: #c0392b; font-weight: bold; }
+    .hl2 { color: #2471a3; font-weight: bold; }
+    .hl3 { color: #1a7340; font-weight: bold; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    /* Flag display */
+    .flags-box {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin: 0.8rem 0;
+    }
+    .flag {
+      border: 2px solid #ccc;
+      border-radius: 6px;
+      padding: 0.4rem 0.8rem;
+      text-align: center;
+      min-width: 80px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88rem;
+    }
+    .flag-name { font-weight: bold; font-size: 1rem; }
+    .flag-desc { color: #666; font-size: 0.8rem; }
+    .flag-z { border-color: #2196f3; background: #e8f4fd; }
+    .flag-n { border-color: #9c27b0; background: #f3e8ff; }
+    .flag-c { border-color: #ff9800; background: #fff3e0; }
+    .flag-v { border-color: #f44336; background: #fdecea; }
+
+    .flow-box {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.86rem;
+      line-height: 2;
+      margin: 1rem 0;
+    }
+
+    .subtitle { color: #666; font-size: 0.95rem; margin-top: 0.25rem; margin-bottom: 2rem; }
+    footer { margin-top: 3rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+    nav.toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0 2rem; }
+    nav.toc h2 { font-size: 1rem; margin: 0 0 0.5rem; border: none; padding: 0; color: #555; }
+    nav.toc ol { margin: 0; padding-left: 1.3rem; }
+    nav.toc li { margin: 0.2rem 0; font-size: 0.93rem; }
+    nav.toc a { color: #0066cc; text-decoration: none; }
+    nav.toc a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<h1>Conditional Branches and Flag Registers</h1>
+  <p class="subtitle">AsmWalker Guide — How if statements and loops work in assembly</p>
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#b1">What is the Flag Register?</a></li>
+      <li><a href="#b2">The Four Flags</a></li>
+      <li><a href="#b3">Instructions That Set Flags: CMP and TEST</a></li>
+      <li><a href="#b4">Conditional Branch Instructions (Jcc / Bcc)</a></li>
+      <li><a href="#b5">How if / else Is Translated</a></li>
+      <li><a href="#b6">How while / for Loops Are Translated</a></li>
+      <li><a href="#b7">Signed vs. Unsigned Comparison</a></li>
+      <li><a href="#b8">Logical Operators and Short-Circuit Evaluation</a></li>
+      <li><a href="#b9">Summary</a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <h2 id="b1">1. What is the Flag Register?</h2>
+
+  <p>
+    In addition to the general-purpose registers (rax, r0, etc.), CPUs have a special register called the
+    <strong>flag register (APSR on ARM / RFLAGS on x86)</strong>.
+    After every arithmetic or comparison instruction, bits in this register are automatically set to describe the nature of the result.
+  </p>
+
+  <p>
+    Conditional branch instructions read these flags to decide whether to branch.
+    This means a C condition like <code>if (a &gt; b)</code> is implemented in assembly as a two-step process:
+    "compare instruction sets the flags → branch instruction reads the flags and jumps (or not)."
+  </p>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    The <strong>Z / N / C / V</strong> flag states are shown at the bottom of the Special Registers panel.
+    Step through a CMP instruction and watch the flags change.
+  </div>
+
+  <!-- 2 -->
+  <h2 id="b2">2. The Four Flags</h2>
+
+  <div class="flags-box">
+    <div class="flag flag-z">
+      <div class="flag-name">Z</div>
+      <div class="flag-desc">Zero<br>Result is zero</div>
+    </div>
+    <div class="flag flag-n">
+      <div class="flag-name">N</div>
+      <div class="flag-desc">Negative<br>Result is negative</div>
+    </div>
+    <div class="flag flag-c">
+      <div class="flag-name">C</div>
+      <div class="flag-desc">Carry<br>Unsigned overflow</div>
+    </div>
+    <div class="flag flag-v">
+      <div class="flag-name">V</div>
+      <div class="flag-desc">oVerflow<br>Signed overflow</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Flag</th><th>ARM name</th><th>x86 name</th><th>Set when</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Z</strong> (Zero)</td>
+        <td>Z</td><td>ZF</td>
+        <td>The result of the instruction is exactly zero.<br><small style="color:#666;">Example: <code>CMP a, b</code> internally computes <code>a - b</code>. If a equals b, the result is 0 and Z=1.</small></td>
+      </tr>
+      <tr>
+        <td><strong>N</strong> (Negative)</td>
+        <td>N</td><td>SF (Sign)</td>
+        <td>The most-significant bit of the result is 1 (a negative number in two's-complement).</td>
+      </tr>
+      <tr>
+        <td><strong>C</strong> (Carry)</td>
+        <td>C</td><td>CF</td>
+        <td>An unsigned overflow occurred.</td>
+      </tr>
+      <tr>
+        <td><strong>V</strong> (oVerflow)</td>
+        <td>V</td><td>OF</td>
+        <td>A signed overflow occurred.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 3 -->
+  <h2 id="b3">3. Instructions That Set Flags: CMP and TEST</h2>
+
+  <h3>CMP — Comparison</h3>
+
+  <p>
+    <code>CMP a, b</code> computes <code>a - b</code> and sets the flags based on the result.
+    The result itself is discarded — it is a subtraction used only to set flags.
+  </p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — CMP flags</h4>
+      <pre><code><span class="comment">; CMP 3, 3  (a == b)</span>
+<span class="comment">; → Z=1, N=0, C=1, V=0</span>
+
+<span class="comment">; CMP 5, 3  (a &gt; b)</span>
+<span class="comment">; → Z=0, N=0, C=1, V=0</span>
+
+<span class="comment">; CMP 3, 5  (a &lt; b)</span>
+<span class="comment">; → Z=0, N=1, C=0, V=0</span></code></pre>
+      <p style="font-size:0.85em;color:#aaa;margin-top:0.5em;">
+        ARM C flag: <strong>1 means "no borrow"</strong>.<br>
+        <code>a &gt;= b</code> → C=1, <code>a &lt; b</code> → C=0
+      </p>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — CMP flags</h4>
+      <pre><code><span class="comment">; CMP 3, 3  (a == b)</span>
+<span class="comment">; → Z=1, N=0, C=0, V=0</span>
+
+<span class="comment">; CMP 5, 3  (a &gt; b)</span>
+<span class="comment">; → Z=0, N=0, C=0, V=0</span>
+
+<span class="comment">; CMP 3, 5  (a &lt; b)</span>
+<span class="comment">; → Z=0, N=1, C=1, V=0</span></code></pre>
+      <p style="font-size:0.85em;color:#aaa;margin-top:0.5em;">
+        x86 CF: <strong>1 means "borrow occurred"</strong>.<br>
+        <code>a &lt; b</code> → CF=1, <code>a &gt;= b</code> → CF=0
+      </p>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>ARM and x86 C flags have opposite meanings</strong><br>
+    For the same <code>CMP 3, 5</code> (a &lt; b), ARM gives C=0 while x86 gives CF=1.
+    Switch between ARM and x86 modes in AsmWalker and compare how the flags change after a CMP instruction.
+  </div>
+
+  <h3>TEST — Bit Mask Check</h3>
+
+  <p>
+    <code>TEST a, b</code> computes <code>a AND b</code> and sets the flags (discarding the result).
+    It is mainly used to check whether a particular bit is set.
+  </p>
+
+  <pre><code><span class="comment">; Check if (x != 0)</span>
+test eax, eax     <span class="comment">; eax AND eax → Z=1 if eax is 0</span>
+jnz  .nonzero     <span class="comment">; branch if Z=0 (eax ≠ 0)</span>
+
+<span class="comment">; Check if (x &amp; 1) — odd number test</span>
+test eax, 1       <span class="comment">; eax AND 1 → Z=1 if bit 0 is clear</span>
+jz   .even        <span class="comment">; branch if Z=1 (even)</span></code></pre>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    After stepping through a CMP instruction, the Instruction Detail panel shows the flag changes as
+    <code>flags: Z=0, N=0, C=0, V=0</code>.
+    Confirm that the following conditional branch instruction reads those flags to decide whether to branch.
+  </div>
+
+  <!-- 4 -->
+  <h2 id="b4">4. Conditional Branch Instructions (Jcc / Bcc)</h2>
+
+  <p>
+    After CMP sets the flags, a conditional branch instruction reads them and decides whether to jump to the specified label.
+    If the condition is not met, execution falls through to the next instruction.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>C condition</th><th>x86 instruction</th><th>ARM instruction</th><th>Flag check</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>==</code> (equal)</td><td><code>JE / JZ</code></td><td><code>BEQ</code></td><td>Z=1</td></tr>
+      <tr><td><code>!=</code> (not equal)</td><td><code>JNE / JNZ</code></td><td><code>BNE</code></td><td>Z=0</td></tr>
+      <tr><td><code>&lt;</code> (signed)</td><td><code>JL / JNGE</code></td><td><code>BLT</code></td><td>N≠V</td></tr>
+      <tr><td><code>&lt;=</code> (signed)</td><td><code>JLE / JNG</code></td><td><code>BLE</code></td><td>Z=1 or N≠V</td></tr>
+      <tr><td><code>&gt;</code> (signed)</td><td><code>JG / JNLE</code></td><td><code>BGT</code></td><td>Z=0 and N=V</td></tr>
+      <tr><td><code>&gt;=</code> (signed)</td><td><code>JGE / JNL</code></td><td><code>BGE</code></td><td>N=V</td></tr>
+      <tr><td><code>&lt;</code> (unsigned)</td><td><code>JB / JNAE</code></td><td><code>BCC / BLO</code></td><td>C=0</td></tr>
+      <tr><td><code>&gt;</code> (unsigned)</td><td><code>JA / JNBE</code></td><td><code>BHI</code></td><td>C=1 and Z=0</td></tr>
+      <tr><td>Unconditional jump</td><td><code>JMP</code></td><td><code>B</code></td><td>(always taken)</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>How to read the instruction names</strong><br>
+    x86: <code>J</code> = Jump, <code>E</code>=Equal, <code>N</code>=Not, <code>L</code>=Less, <code>G</code>=Greater,
+    <code>B</code>=Below (unsigned), <code>A</code>=Above (unsigned).<br>
+    ARM: <code>B</code> = Branch, with suffixes like <code>EQ</code>=Equal, <code>NE</code>=Not Equal, etc.
+  </div>
+
+  <!-- 5 -->
+  <h2 id="b5">5. How if / else Is Translated</h2>
+
+  <p>Let's see how GCC translates an <code>if/else</code> statement.</p>
+
+  <pre><code><span class="comment">// C</span>
+if (a &gt; b) {
+    result = a;
+} else {
+    result = b;
+}</code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — if/else translation</h4>
+      <pre><code>    ldr  r0, [fp, #-8]    <span class="comment">; r0 = a</span>
+    ldr  r1, [fp, #-12]   <span class="comment">; r1 = b</span>
+    cmp  r0, r1            <span class="comment">; set flags from a - b</span>
+    ble  .Lelse            <span class="comment">; if a &lt;= b, jump to else</span>
+
+<span class="comment">; if body (a &gt; b)</span>
+    ldr  r3, [fp, #-8]    <span class="comment">; result = a</span>
+    str  r3, [fp, #-16]
+    b    .Lend             <span class="comment">; skip else</span>
+
+<span class="comment">.Lelse:</span>
+    ldr  r3, [fp, #-12]   <span class="comment">; result = b</span>
+    str  r3, [fp, #-16]
+
+<span class="comment">.Lend:</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — if/else translation</h4>
+      <pre><code>    mov  eax, DWORD PTR [rbp-4]  <span class="comment">; eax = a</span>
+    cmp  eax, DWORD PTR [rbp-8]  <span class="comment">; set flags from a - b</span>
+    jle  .Lelse                   <span class="comment">; if a &lt;= b, jump to else</span>
+
+<span class="comment">; if body (a &gt; b)</span>
+    mov  eax, DWORD PTR [rbp-4]
+    mov  DWORD PTR [rbp-12], eax  <span class="comment">; result = a</span>
+    jmp  .Lend                    <span class="comment">; skip else</span>
+
+<span class="comment">.Lelse:</span>
+    mov  eax, DWORD PTR [rbp-8]
+    mov  DWORD PTR [rbp-12], eax  <span class="comment">; result = b</span>
+
+<span class="comment">.Lend:</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    GCC's basic pattern is to <strong>generate a branch with the negated condition</strong>.
+    For <code>if (a &gt; b)</code>, it generates a jump "when <code>a &gt; b</code> is false (i.e., <code>a &lt;= b</code>)" to the else block.
+    When the condition is true, execution simply falls through to the next instruction.
+  </p>
+
+  <div class="key">
+    <strong>Getting comfortable with "inverted" conditions</strong><br>
+    C's <code>if (cond)</code> → assembly generates <code>j[NOT cond] else_label</code>.
+    Since it's "the condition to jump to else," it can feel backwards at first.
+    Think of it as: "this branch is an escape hatch to the else block."
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    At a conditional branch step, observe whether the assembly panel highlight moves to the next line (fall-through)
+    or jumps to the label.
+    The Instruction Detail panel shows an explanation like "branched because Z=1."
+  </div>
+
+  <!-- 6 -->
+  <h2 id="b6">6. How while / for Loops Are Translated</h2>
+
+  <p>A loop translates to: "check condition → body → unconditional jump back to top."</p>
+
+  <pre><code><span class="comment">// C</span>
+int i = 0;
+int sum = 0;
+while (i &lt; 5) {
+    sum += i;
+    i++;
+}</code></pre>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — while loop</h4>
+      <pre><code>    mov  r3, #0
+    str  r3, [fp, #-8]    <span class="comment">; i = 0</span>
+    mov  r3, #0
+    str  r3, [fp, #-12]   <span class="comment">; sum = 0</span>
+
+<span class="hl">.Lloop:</span>
+    ldr  r3, [fp, #-8]    <span class="comment">; r3 = i</span>
+    cmp  r3, #4            <span class="comment">; flags from i - 4</span>
+    <span class="hl2">bgt  .Lend</span>             <span class="comment">; if i &gt; 4, exit</span>
+
+    ldr  r2, [fp, #-12]
+    ldr  r3, [fp, #-8]
+    add  r3, r2, r3        <span class="comment">; sum += i</span>
+    str  r3, [fp, #-12]
+
+    ldr  r3, [fp, #-8]
+    add  r3, r3, #1        <span class="comment">; i++</span>
+    str  r3, [fp, #-8]
+
+    <span class="hl3">b    .Lloop</span>             <span class="comment">; back to top</span>
+<span class="hl">.Lend:</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — while loop</h4>
+      <pre><code>    mov  DWORD PTR [rbp-4], 0   <span class="comment">; i = 0</span>
+    mov  DWORD PTR [rbp-8], 0   <span class="comment">; sum = 0</span>
+
+<span class="hl">.Lloop:</span>
+    cmp  DWORD PTR [rbp-4], 4   <span class="comment">; flags from i - 4</span>
+    <span class="hl2">jg   .Lend</span>                  <span class="comment">; if i &gt; 4, exit</span>
+
+    mov  eax, DWORD PTR [rbp-4]
+    add  DWORD PTR [rbp-8], eax <span class="comment">; sum += i</span>
+
+    add  DWORD PTR [rbp-4], 1   <span class="comment">; i++</span>
+
+    <span class="hl3">jmp  .Lloop</span>                 <span class="comment">; back to top</span>
+<span class="hl">.Lend:</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    With <code>-O0</code>, GCC typically uses "check at the top, then execute the body."
+    With <code>-O1</code> or higher, it may convert to a <em>do-while</em> form — "execute body first, then check" —
+    which eliminates one redundant jump.
+  </p>
+
+  <div class="note">
+    <strong>Try it in AsmWalker</strong><br>
+    Step through and confirm that the same loop body instructions are highlighted multiple times.
+    At the conditional branch, observe both "did not branch this iteration" and "branched (exited loop)"
+    and correlate with the flag values.
+  </div>
+
+  <!-- 7 -->
+  <h2 id="b7">7. Signed vs. Unsigned Comparison</h2>
+
+  <p>
+    Whether a C comparison is signed or unsigned depends on the variable's type.
+    Assembly uses different branch instructions for each.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Type</th><th>Kind of comparison</th><th>x86 branch</th><th>ARM branch</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>int</code> (signed)</td><td>Signed comparison</td><td><code>JL / JG / JLE / JGE</code></td><td><code>BLT / BGT / BLE / BGE</code></td></tr>
+      <tr><td><code>unsigned int</code></td><td>Unsigned comparison</td><td><code>JB / JA / JBE / JAE</code></td><td><code>BCC / BHI / BLS / BCS</code></td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    This reflects how the CPU uses flags differently.
+    Signed comparisons rely on the relationship between the N and V flags,
+    while unsigned comparisons use the C and Z flags.
+  </p>
+
+  <div class="key">
+    <strong>Why the distinction matters</strong><br>
+    <code>-1</code> in two's-complement is <code>0xFFFFFFFF</code>.
+    Interpreted as unsigned, that's about 4 billion (4,294,967,295).
+    <code>-1 &lt; 1</code> is true in signed arithmetic, but false in unsigned.
+    The compiler automatically selects the correct comparison instruction based on the C variable type.
+  </div>
+
+  <!-- 8 -->
+  <h2 id="b8">8. Logical Operators and Short-Circuit Evaluation</h2>
+
+  <p>
+    Compound conditions using <code>&&</code> or <code>||</code> expand into multiple CMP + branch sequences in assembly.
+  </p>
+
+  <pre><code><span class="comment">// C: if (a &gt; 0 &amp;&amp; b &gt; 0)</span></code></pre>
+
+  <pre><code>    cmp  eax, 0
+    jle  .Lfalse    <span class="comment">; if a &lt;= 0, bail immediately (short-circuit: skip b)</span>
+    cmp  ebx, 0
+    jle  .Lfalse    <span class="comment">; if b &lt;= 0, bail</span>
+
+<span class="comment">; both are true</span>
+    ...
+<span class="comment">.Lfalse:</span>
+    ...</code></pre>
+
+  <p>
+    C's logical AND (<code>&&</code>) evaluates left-to-right and <strong>stops as soon as it finds a false value</strong>
+    — this is called short-circuit evaluation.
+    In assembly, this is achieved by jumping to a label immediately when the left-hand side is false.
+  </p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM — OR condition (||)</h4>
+      <pre><code>    cmp  r0, #0
+    bgt  .Ltrue    <span class="comment">; if a &gt; 0, true immediately</span>
+    cmp  r1, #0
+    ble  .Lfalse   <span class="comment">; if b &lt;= 0, false</span>
+<span class="comment">.Ltrue:</span>
+    <span class="comment">; at least one is true</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 — OR condition (||)</h4>
+      <pre><code>    cmp  eax, 0
+    jg   .Ltrue    <span class="comment">; if a &gt; 0, true immediately</span>
+    cmp  ebx, 0
+    jle  .Lfalse   <span class="comment">; if b &lt;= 0, false</span>
+<span class="comment">.Ltrue:</span>
+    <span class="comment">; at least one is true</span></code></pre>
+    </div>
+  </div>
+
+  <!-- 9 -->
+  <h2 id="b9">9. Summary</h2>
+
+  <table>
+    <thead>
+      <tr><th>Concept</th><th>Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Flag register</td><td>Four bits: Z / N / C / V. Automatically updated by arithmetic and comparison instructions.</td></tr>
+      <tr><td>CMP a, b</td><td>Computes a - b and sets flags (result is discarded).</td></tr>
+      <tr><td>TEST a, b</td><td>Computes a AND b and sets flags (used for bit testing).</td></tr>
+      <tr><td>Conditional branch</td><td>Reads flags and decides whether to jump (Jcc / Bcc).</td></tr>
+      <tr><td>if/else translation</td><td>A branch with the negated condition jumps over the else block.</td></tr>
+      <tr><td>Loop translation</td><td>Check at top → body → unconditional jump back to top.</td></tr>
+      <tr><td>Signed vs. unsigned</td><td>Different branch instructions depending on the variable type (JL/JG vs. JB/JA).</td></tr>
+      <tr><td>Short-circuit evaluation</td><td><code>&&</code> / <code>||</code> is a chain of multiple CMP + branches.</td></tr>
+    </tbody>
+  </table>
+
+  <p>
+    Once you understand how conditional branches work, you can trace the control flow of assembly code
+    top-to-bottom and see exactly which condition causes a jump and where it goes.
+    Step through the sample code in AsmWalker and compare each C condition with its corresponding assembly branch instruction.
+  </p>
+
+  <footer>
+    AsmWalker Guide
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/en/function-call.html">← How Function Calls Work</a></span>
+      <a href="/about.en.html#guides" class="guide-nav-center">Guide index</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/en/pointer.html">Pointers and Assembly →</a></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

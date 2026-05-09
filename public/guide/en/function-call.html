@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How Function Calls Work — AsmWalker Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.93rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+    .arch-box {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+    }
+    .arch-box h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .arch-arm  { border-top: 3px solid #7c4dff; }
+    .arch-x86  { border-top: 3px solid #0066cc; }
+
+    .step {
+      display: flex;
+      gap: 0.8rem;
+      margin: 0.6rem 0;
+      align-items: flex-start;
+    }
+    .step-num {
+      background: #333;
+      color: #fff;
+      border-radius: 50%;
+      width: 1.5rem;
+      height: 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+    }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+<h1>How Function Calls Work</h1>
+  <p>When you call a function in C, what assembly instructions does the compiler generate? This page walks through all the mechanisms involved in a function call, step by step.</p>
+
+  <div class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#problem">Problems a "call" must solve</a></li>
+      <li><a href="#args">Passing arguments (calling convention)</a></li>
+      <li><a href="#retaddr">Saving the return address</a></li>
+      <li><a href="#stack-frame">Stack frames</a></li>
+      <li><a href="#retval">Returning a value</a></li>
+      <li><a href="#whole-picture">The complete picture</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="problem">1. Problems a "call" must solve</h2>
+
+  <p>Consider this C code:</p>
+  <pre><code>int add(int a, int b) {
+    return a + b;
+}
+
+int main(void) {
+    int result = add(3, 5);
+    return 0;
+}</code></pre>
+
+  <p>When <code>main</code> calls <code>add(3, 5)</code>, the CPU must solve three problems:</p>
+  <ol>
+    <li><strong>How to pass the arguments</strong> — deliver <code>3</code> and <code>5</code> to <code>add</code></li>
+    <li><strong>Where to return</strong> — after <code>add</code> finishes, get back to where <code>main</code> left off</li>
+    <li><strong>How to receive the return value</strong> — use <code>add</code>'s result in <code>main</code></li>
+  </ol>
+
+  <p>These agreements are called the <strong>Calling Convention (ABI — Application Binary Interface)</strong>. Each architecture has a standard, and compilers follow it strictly.</p>
+
+  <!-- ============================================================ -->
+  <h2 id="args">2. Passing arguments (calling convention)</h2>
+
+  <p>Arguments are passed via <strong>registers</strong> rather than on the stack, because register access is much faster than memory.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM Cortex-M (AAPCS)</h4>
+      <p>Arguments 1–4 go in <code>r0</code>–<code>r3</code>.<br>Arguments 5+ go on the stack.</p>
+      <pre><code>mov r0, #3   <span class="comment">; arg 1: a = 3</span>
+mov r1, #5   <span class="comment">; arg 2: b = 5</span>
+bl  add</code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64 (System V AMD64 ABI)</h4>
+      <p>Arguments 1–6 go in <code>rdi rsi rdx rcx r8 r9</code>.<br>Arguments 7+ go on the stack.</p>
+      <pre><code>mov edi, 3   <span class="comment">; arg 1: a = 3</span>
+mov esi, 5   <span class="comment">; arg 2: b = 5</span>
+call add</code></pre>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>Why <code>edi</code> instead of <code>rdi</code>?</strong><br>
+    When an argument is <code>int</code> (32-bit), GCC uses the 32-bit register name (<code>edi</code>) rather than the 64-bit one (<code>rdi</code>).
+    Writing to <code>edi</code> automatically zeroes the upper 32 bits of <code>rdi</code>, so the behavior is identical.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    Compile the "Function Call" sample and step to the <code>call</code> (x86) or <code>bl</code> (ARM) instruction.
+    The argument registers (<code>rdi</code>/<code>rsi</code> on x86, <code>r0</code>/<code>r1</code> on ARM) show blue "Arg N" badges in the Registers panel.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="retaddr">3. Saving the return address</h2>
+
+  <p>The address of <code>main</code>'s next instruction after the call is the <strong>return address</strong>.</p>
+  <p>The CPU tracks the current execution position in the <strong>PC / RIP</strong>. A <code>call</code> or <code>bl</code> instruction overwrites it with the callee's address. Without saving the return address first, there's no way to get back.</p>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM: saved in the Link Register (LR / r14)</h4>
+      <p>The <code>BL</code> instruction automatically writes the return address into <code>LR</code>.</p>
+      <pre><code>bl add      <span class="comment">; LR ← return address</span>
+            <span class="comment">; PC ← address of add</span>
+
+<span class="comment">; returning from add:</span>
+bx lr       <span class="comment">; PC ← LR (back to main)</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64: saved on the stack</h4>
+      <p>The <code>call</code> instruction pushes the return address onto the stack.</p>
+      <pre><code>call add    <span class="comment">; [rsp] ← return address</span>
+            <span class="comment">; rsp  -= 8</span>
+            <span class="comment">; RIP  ← address of add</span>
+
+<span class="comment">; returning from add:</span>
+ret         <span class="comment">; RIP ← [rsp] (back to main)</span>
+            <span class="comment">; rsp += 8</span></code></pre>
+    </div>
+  </div>
+
+  <div class="key">
+    <strong>The fundamental difference between ARM and x86:</strong><br>
+    ARM saves the return address in one register (LR), so calling another function inside <code>add</code> would overwrite LR.
+    ARM functions therefore begin with <code>push {lr}</code> and end with <code>pop {pc}</code> to save and restore it.
+    x86's <code>call</code> automatically pushes to the stack, so this problem is handled automatically.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    At the <code>call</code> (x86) step, the Instruction Detail panel shows the return address being saved as
+    <code>[rsp] ← 0x401038</code>. That same value appears in the Stack panel — compare both panels to see where the return address is saved.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="stack-frame">4. Stack frames</h2>
+
+  <p>The region of the stack that a function allocates for its own use — local variables and temporary data — is called its <strong>stack frame</strong>.</p>
+  <p>The stack grows from high addresses toward low addresses.</p>
+
+  <h3>"Releasing" just means moving SP back</h3>
+
+  <p>When a function returns, its frame is "released" — but this doesn't erase anything in memory.</p>
+  <p>Both allocation and release are done by <strong>moving SP</strong>.</p>
+
+  <pre><code>Allocate: sub rsp, 16    <span class="comment">; SP decreases → region is "in use"</span>
+Release:  add rsp, 16    <span class="comment">; SP increases → region is "available" again</span>
+                         <span class="comment">; ※ data remains in memory until the next call overwrites it</span></code></pre>
+
+  <div class="key">
+    <strong>"Data persists after release" trap:</strong><br>
+    If you take a pointer to a local variable and pass it outside the function, the memory it points to is still there briefly after the function returns. But the next function call will overwrite it, causing the pointer to reference garbage. This is the "stack variable address escape" bug common in C.
+  </div>
+
+  <h3>Building the frame (prologue)</h3>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>push {r7, lr}     <span class="comment">; save caller's r7 (FP) and LR</span>
+sub  r7, sp, #0   <span class="comment">; r7 (FP) ← current SP</span>
+sub  sp, sp, #8   <span class="comment">; allocate space for locals</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>push rbp          <span class="comment">; save caller's rbp</span>
+mov  rbp, rsp     <span class="comment">; rbp ← current rsp (frame base)</span>
+sub  rsp, 16      <span class="comment">; allocate space for locals</span></code></pre>
+    </div>
+  </div>
+
+  <p>
+    <code>r7</code> (ARM) and <code>rbp</code> (x86) are the <strong>frame pointer (FP / Base Pointer)</strong> — they hold the base address of the current frame. Local variables are accessed as "frame pointer ± offset".
+  </p>
+
+  <pre><code><span class="comment">; x86-64: storing local variable a at [rbp-4]</span>
+mov DWORD PTR [rbp-4], edi    <span class="comment">; a = first argument (saved to stack)</span>
+mov eax, DWORD PTR [rbp-4]   <span class="comment">; eax = a (load)</span></code></pre>
+
+  <div class="key">
+    <strong>The frame pointer can be omitted:</strong><br>
+    With <code>-O1</code> and above, or ARM Thumb mode (<code>-mthumb</code>), the compiler may skip the frame pointer
+    and use <strong>SP-relative addressing</strong> for locals instead.
+    <br><br>
+    <code>mov DWORD PTR [rsp+4], edi</code> (no frame pointer)<br><br>
+    In that case <code>rbp</code> (or <code>r7</code>) is free for other uses.
+    AsmWalker samples use <code>-O0</code> (no optimization), so the frame-pointer form is generated.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    At the <code>push rbp</code> (x86) or <code>push {r7, lr}</code> (ARM) step, the Stack panel shows the frame pointer being pushed.
+    As you step further, the stack grows downward (toward lower addresses).
+  </div>
+
+  <h3>Tearing down the frame (epilogue)</h3>
+
+  <div class="arch-grid">
+    <div class="arch-box arch-arm">
+      <h4>ARM</h4>
+      <pre><code>pop {r7, pc}   <span class="comment">; restore r7, PC = LR (return)</span></code></pre>
+    </div>
+    <div class="arch-box arch-x86">
+      <h4>x86-64</h4>
+      <pre><code>pop rbp        <span class="comment">; restore rbp</span>
+ret            <span class="comment">; RIP ← [rsp] (return), rsp += 8</span>
+<span class="comment">; ※ GCC sometimes uses the leave instruction instead of pop rbp</span></code></pre>
+    </div>
+  </div>
+
+  <h3>Stack state during add (x86-64)</h3>
+
+  <pre><code>High address
+┌──────────────────────────────┐
+│  ... (main's frame)           │
+│  return address (pushed by call) │ ← right after: call add
+│  saved rbp                    │ ← right after: push rbp
+│  local variable a = 3        │ ← [rbp-4]
+│  local variable b = 5        │ ← [rbp-8]
+│  ... (free)                   │ ← rsp points here
+Low address
+
+  ↑ after pop rbp / ret, rsp moves back up
+    and add's frame region becomes "available" (data not erased)</code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="retval">5. Returning a value</h2>
+
+  <p>The return value is placed in a designated register before returning.</p>
+
+  <table>
+    <thead>
+      <tr><th>Architecture</th><th>Integer / pointer return value</th><th>64-bit return value</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ARM Cortex-M</td><td><code>r0</code></td><td><code>r0:r1</code> (high in r1)</td></tr>
+      <tr><td>x86-64</td><td><code>rax</code> (or <code>eax</code> for 32-bit)</td><td><code>rax</code></td></tr>
+    </tbody>
+  </table>
+
+  <pre><code><span class="comment">; end of add function (x86-64)</span>
+mov edx, DWORD PTR [rbp-4]   <span class="comment">; edx = a</span>
+mov eax, DWORD PTR [rbp-8]   <span class="comment">; eax = b</span>
+add eax, edx                  <span class="comment">; eax = a + b (function return value)</span>
+pop rbp
+ret                           <span class="comment">; return to main; result remains in eax</span></code></pre>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    At the <code>ret</code> (x86) or <code>bx lr</code> / <code>pop {pc}</code> (ARM) step,
+    the Registers panel shows a yellow "Return value" badge on <code>eax</code> (x86) or <code>r0</code> (ARM).
+    That value corresponds to the <code>result</code> variable in <code>main</code>.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="whole-picture">6. The complete picture</h2>
+
+  <p>The full sequence for <code>main</code> calling <code>add(3, 5)</code> and returning:</p>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div><strong>Place arguments in registers</strong><br>
+      <code>mov edi, 3</code> / <code>mov esi, 5</code> (x86) or <code>mov r0, #3</code> / <code>mov r1, #5</code> (ARM)
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div><strong>Jump to the function with call / bl</strong><br>
+      Save the return address to the stack (x86) or LR (ARM), then rewrite PC to point at <code>add</code>.
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div><strong>Prologue: build the stack frame</strong><br>
+      Save the previous frame pointer, set the new frame pointer, allocate space for local variables.
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div><strong>Function body executes</strong><br>
+      Read argument registers, compute the result, store it in <code>eax</code> (x86) or <code>r0</code> (ARM).
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div><strong>Epilogue: tear down the stack frame</strong><br>
+      Restore the frame pointer, wind the stack back.
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">6</div>
+    <div><strong>Return to main with ret / bx lr</strong><br>
+      Read the return address from the stack (x86) or LR (ARM) and put it back in PC.
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">7</div>
+    <div><strong>main uses the return value</strong><br>
+      The result is in <code>eax</code> (x86) or <code>r0</code> (ARM).
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    Select the "Function Call" sample and compile it. Step through each instruction to follow the entire sequence above.
+    At the <code>call</code> step, argument registers show blue badges; at the <code>ret</code> step, the return register shows a yellow badge.
+  </div>
+
+  <footer>
+    AsmWalker Guide
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/en/stack.html">← How the Stack Works</a></span>
+      <a href="/about.en.html#guides" class="guide-nav-center">Guide index</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/en/branch.html">Conditional Branches →</a></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

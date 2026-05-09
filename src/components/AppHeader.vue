@@ -29,32 +29,32 @@
         </button>
         <div class="absolute right-0 top-full pt-1 z-50 hidden group-hover:block">
           <div class="w-52 bg-gray-800 border border-gray-700 rounded shadow-lg">
-            <a href="/guide/machine-code.html" target="_blank" rel="noopener"
+            <a :href="guideUrl('machine-code')" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">article</span>{{ $t('app.guideItems.machineCode') }}
             </a>
-            <a href="/guide/asm-reading.html" target="_blank" rel="noopener"
+            <a :href="guideUrl('asm-reading')" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">article</span>{{ $t('app.guideItems.asmReading') }}
             </a>
-            <a href="/guide/stack.html" target="_blank" rel="noopener"
+            <a :href="guideUrl('stack')" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">article</span>{{ $t('app.guideItems.stack') }}
             </a>
-            <a href="/guide/function-call.html" target="_blank" rel="noopener"
+            <a :href="guideUrl('function-call')" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">article</span>{{ $t('app.guideItems.functionCall') }}
             </a>
-            <a href="/guide/branch.html" target="_blank" rel="noopener"
+            <a :href="guideUrl('branch')" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">article</span>{{ $t('app.guideItems.branch') }}
             </a>
-            <a href="/guide/pointer.html" target="_blank" rel="noopener"
+            <a :href="guideUrl('pointer')" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">article</span>{{ $t('app.guideItems.pointer') }}
             </a>
             <div class="border-t border-gray-700 my-1"></div>
-            <a href="/about.html" target="_blank" rel="noopener"
+            <a :href="aboutUrl" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">info</span>{{ $t('app.guideItems.about') }}
             </a>
@@ -66,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { locale } = useI18n()
@@ -75,4 +76,12 @@ function toggleLocale() {
   locale.value = next
   localStorage.setItem('asm-walker-locale', next)
 }
+
+function guideUrl(page: string): string {
+  return locale.value === 'en' ? `/guide/en/${page}.html` : `/guide/${page}.html`
+}
+
+const aboutUrl = computed(() =>
+  locale.value === 'en' ? '/about.en.html' : '/about.html'
+)
 </script>

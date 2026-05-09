@@ -58,7 +58,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import ArchSwitch from '@/components/ArchSwitch.vue'
 import StepController from '@/components/StepController.vue'
@@ -73,7 +73,18 @@ import DiffPanel from '@/components/DiffPanel.vue'
 import CCompilePanel from '@/components/CCompilePanel.vue'
 import { useSimulator } from '@/composables/useSimulator'
 
-const { preset } = useSimulator()
+const { preset, prevStep, nextStep } = useSimulator()
 
 const showCSource = computed(() => preset.value?.id === 'compile')
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.repeat) return
+  const tag = (e.target as HTMLElement).tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return
+  if (e.key === 'ArrowLeft') { e.preventDefault(); prevStep() }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); nextStep() }
+}
+
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 </script>

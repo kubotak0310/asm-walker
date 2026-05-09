@@ -25,18 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
 import { useSimulator } from '@/composables/useSimulator'
 
 const { currentStep, totalSteps, isFirst, isLast, prevStep, nextStep, reset } = useSimulator()
-
-function onKeydown(e: KeyboardEvent) {
-  const tag = (e.target as HTMLElement).tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA') return
-  if (e.key === 'ArrowLeft') { e.preventDefault(); prevStep() }
-  else if (e.key === 'ArrowRight') { e.preventDefault(); nextStep() }
-}
-
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 </script>

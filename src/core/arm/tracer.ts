@@ -5,6 +5,7 @@ import { BASE_PC_ARM } from '../types'
 import { applyUpdate } from '../simulator'
 import type { ParseResult } from './parser'
 import { interpretInstruction } from './interpreter'
+import type { Locale } from './interpreter'
 
 export interface TraceResult {
   states: MachineState[]
@@ -32,6 +33,7 @@ export function traceProgram(
   initialState: MachineState,
   maxSteps = 200,
   cLineMap?: Map<number, number>,
+  locale: Locale = 'ja',
 ): TraceResult {
   const { instructions, labels, dataLabels, romData, sourceLines } = parseResult
   const instrCount = instructions.length
@@ -87,6 +89,7 @@ export function traceProgram(
       dataLabels,
       instrCount,
       callStack.length,
+      locale,
     )
 
     if ('error' in result) {

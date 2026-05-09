@@ -89,6 +89,20 @@
 - `public/about.html`: ツール説明ページを新規作成（アーキテクチャ・アドレス表示の仕組み・技術構成を説明）
 - `public/guide/function-call.html`: 関数呼び出しの仕組み解説ページを新規作成（ARM/x86 対比・スタックフレーム・ABI）
 
+### EN/JA 言語切り替え実装（2026-05-09）で完了した機能
+- vue-i18n v11 を導入（`src/i18n/index.ts`・`src/i18n/locales/ja.ts`・`src/i18n/locales/en.ts`）
+  - ブラウザ言語自動検出（`navigator.language.startsWith('ja')`）で初期ロケールを決定
+  - `localStorage('asm-walker-locale')` で選択言語を永続化
+- `AppHeader.vue` を新規作成 — ロゴ・EN/JA セグメントコントロール・ガイドドロップダウンをヘッダーコンポーネントに分離
+- Vue コンポーネント12ファイルの日本語文字列を `$t('key')` に置換
+- ARM インタープリタのロケール対応:
+  - `ARM_COMMENTS` 辞書（13エントリ）: ロケール別 comment テンプレート関数
+  - `ARM_EXPLAINS` 辞書（21エントリ）: ロケール別 explain テンプレート関数
+  - `locale: Locale` パラメータを `interpretInstruction` → 全ハンドラ関数に伝播
+  - `traceProgram` に `locale` パラメータを追加（`useSimulator.ts` から `i18n.global.locale.value` で渡す）
+- `src/samples/index.ts`: `SampleDef.name` を `string` → `{ ja: string; en: string }` に変更
+- **注意**: ARM explain/comment はトレース時（コンパイル時）にベイクされる設計。ロケール切り替え後は再コンパイルが必要
+
 ---
 
 ## フェーズ2以降の開発方針

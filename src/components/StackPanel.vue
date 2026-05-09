@@ -1,9 +1,9 @@
 <template>
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">スタックメモリ</div>
+    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">{{ $t('stackPanel.header') }}</div>
     <div class="overflow-auto max-h-64 font-mono text-xs p-2 space-y-0.5">
       <div v-if="cells.length === 0" class="text-gray-600 text-center py-4">
-        スタック空
+        {{ $t('stackPanel.empty') }}
       </div>
       <div
         v-for="cell in cells"
@@ -44,12 +44,10 @@ const cells = computed<Cell[]>(() => {
   const prevAddrs = prev ? new Set(Object.keys(prev.stack).map(Number)) : new Set<number>()
 
   const addrSet = new Set<number>()
-  // ROM 疑似領域（リテラルプール）はスタックではないため表示しない
   for (const a of Object.keys(state.stack).map(Number)) {
     if (a < BASE_ROM_DATA) addrSet.add(a)
   }
 
-  // Fill all 4-byte slots within each frame (shows uninitialized reserved area)
   for (const frame of state.frames) {
     for (let a = frame.lo; a < frame.hi; a += 4) addrSet.add(a)
   }
@@ -101,5 +99,4 @@ function labelClass(cell: Cell): string {
   if (cell.kind === 'hw') return 'text-orange-400 text-xs ml-2'
   return 'text-gray-400 text-xs ml-2'
 }
-
 </script>

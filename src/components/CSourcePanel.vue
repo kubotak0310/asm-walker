@@ -1,14 +1,14 @@
 <template>
   <div class="bg-gray-800 rounded-lg border border-gray-700">
     <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold flex items-center">
-      <span>C ソースコード</span>
+      <span>{{ $t('cSourcePanel.header') }}</span>
       <div v-if="preset?.cCode?.length" class="relative flex items-center ml-auto">
         <Transition name="fade">
           <span v-if="copied" class="absolute bottom-7 left-1/2 -translate-x-1/2 text-xs text-green-400 whitespace-nowrap pointer-events-none bg-gray-900 px-1.5 py-0.5 rounded border border-gray-600">Copied!</span>
         </Transition>
         <button
           @click="copySrc"
-          title="Cソースをコピー"
+          :title="$t('cSourcePanel.copyTitle')"
           class="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-600 transition-colors"
         >
           <span class="material-icons text-base text-gray-400">content_copy</span>

@@ -3,14 +3,14 @@
 
 export interface SampleDef {
   id: string
-  name: string
+  name: { ja: string; en: string }
   cCode: string
 }
 
 export const SAMPLES: SampleDef[] = [
   {
     id: 'funcCall',
-    name: '関数呼び出し',
+    name: { ja: '関数呼び出し', en: 'Function Call' },
     cCode: `int add(int a, int b) {
   return a + b;
 }
@@ -21,7 +21,7 @@ int main() {
   },
   {
     id: 'branch',
-    name: '条件分岐',
+    name: { ja: '条件分岐', en: 'Conditional Branch' },
     cCode: `int compare(int a, int b) {
   if (a < b) return -1;
   else if (a == b) return 0;
@@ -37,7 +37,7 @@ int main() {
   },
   {
     id: 'loop',
-    name: 'ループ',
+    name: { ja: 'ループ', en: 'Loop' },
     cCode: `int sum_to(int n) {
   int sum = 0;
   for (int i = 1; i <= n; i++) {
@@ -52,7 +52,7 @@ int main() {
   },
   {
     id: 'stackFrame',
-    name: 'スタックフレーム',
+    name: { ja: 'スタックフレーム', en: 'Stack Frame' },
     cCode: `int funcB(int p) {
   int q = p * 2;
   return q;
@@ -72,7 +72,7 @@ int main() {
   },
   {
     id: 'pointerPass',
-    name: 'ポインタ渡し',
+    name: { ja: 'ポインタ渡し', en: 'Pointer Passing' },
     cCode: `void double_it(int *p) {
   *p = *p * 2;
 }
@@ -85,7 +85,7 @@ int main() {
   },
   {
     id: 'array',
-    name: '配列を関数に渡す',
+    name: { ja: '配列を関数に渡す', en: 'Array to Function' },
     cCode: `int sum_array(int *a, int n) {
   int s = 0;
   s += a[0];

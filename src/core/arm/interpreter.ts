@@ -17,6 +17,130 @@ export interface InterpretResult {
   nextInstrIdx: number
 }
 
+export type Locale = 'ja' | 'en'
+
+type ArmCommentDict = {
+  compare(a: string, b: string, flags: string): string
+  push(regs: string): string
+  pop(regs: string): string
+  condSkip(cond: string): string
+  branchCond(cond: string, label: string): string
+  branch(label: string): string
+  call(label: string, lr: string): string
+  ret(reg: string): string
+  nop: string
+  cbzTaken(reg: string, label: string): string
+  cbnzTaken(reg: string, label: string): string
+  cbzSkip(reg: string): string
+  cbnzSkip(reg: string): string
+}
+
+const ARM_COMMENTS: Record<Locale, ArmCommentDict> = {
+  ja: {
+    compare: (a, b, flags) => `${a} と ${b} を比較: ${flags}`,
+    push: (regs) => `${regs} をスタックに保存`,
+    pop: (regs) => `スタックから ${regs} を復元`,
+    condSkip: (cond) => `${cond} 不成立、スキップ`,
+    branchCond: (cond, label) => `${cond} 成立、${label} へ分岐`,
+    branch: (label) => `${label} へ分岐`,
+    call: (label, lr) => `${label}() を呼び出し（LR=${lr}）`,
+    ret: (reg) => `${reg} へ戻る（関数復帰）`,
+    nop: '（何もしない）',
+    cbzTaken: (reg, label) => `${reg} = 0、${label} へ分岐`,
+    cbnzTaken: (reg, label) => `${reg} ≠ 0、${label} へ分岐`,
+    cbzSkip: (reg) => `${reg} ≠ 0、スキップ`,
+    cbnzSkip: (reg) => `${reg} = 0、スキップ`,
+  },
+  en: {
+    compare: (a, b, flags) => `Compare ${a} with ${b}: ${flags}`,
+    push: (regs) => `Push ${regs} onto stack`,
+    pop: (regs) => `Pop ${regs} from stack`,
+    condSkip: (cond) => `${cond} not taken, skip`,
+    branchCond: (cond, label) => `Branch to ${label} (${cond} taken)`,
+    branch: (label) => `Branch to ${label}`,
+    call: (label, lr) => `Call ${label}() (LR=${lr})`,
+    ret: (reg) => `Return to ${reg}`,
+    nop: '(no operation)',
+    cbzTaken: (reg, label) => `${reg} = 0, branch to ${label}`,
+    cbnzTaken: (reg, label) => `${reg} ≠ 0, branch to ${label}`,
+    cbzSkip: (reg) => `${reg} ≠ 0, skip`,
+    cbnzSkip: (reg) => `${reg} = 0, skip`,
+  },
+}
+
+type ArmExplainDict = {
+  mov(dst: string, withFlags: boolean): string
+  add(withFlags: boolean): string
+  sub(withFlags: boolean): string
+  mul(withFlags: boolean): string
+  div(): string
+  bitwise(withFlags: boolean): string
+  shift(withFlags: boolean): string
+  cmp(): string
+  ldrLiteral(): string
+  ldr(writeBack: boolean, postIndex: boolean): string
+  str(writeBack: boolean, postIndex: boolean): string
+  push(): string
+  pop(): string
+  ldm(): string
+  stm(): string
+  condFalse(): string
+  branch(): string
+  call(): string
+  bxRet(): string
+  cbz(): string
+  nop(): string
+}
+
+const ARM_EXPLAINS: Record<Locale, ArmExplainDict> = {
+  ja: {
+    mov: (dst, f) => `${dst} に値をセット${f ? '（フラグ更新）' : ''}`,
+    add: (f) => `加算${f ? '（フラグ更新）' : ''}`,
+    sub: (f) => `減算${f ? '（フラグ更新）' : ''}`,
+    mul: (f) => `乗算${f ? '（フラグ更新）' : ''}`,
+    div: () => '除算',
+    bitwise: (f) => `ビット演算${f ? '（フラグ更新）' : ''}`,
+    shift: (f) => `シフト演算${f ? '（フラグ更新）' : ''}`,
+    cmp: () => '比較（フラグのみ更新）',
+    ldrLiteral: () => 'リテラルプールから定数をロード',
+    ldr: (wb, pi) => wb ? 'メモリからロード（ライトバック）' : pi ? 'メモリからロード（ポストインデックス）' : 'メモリからロード',
+    str: (wb, pi) => wb ? 'メモリにストア（ライトバック）' : pi ? 'メモリにストア（ポストインデックス）' : 'メモリにストア',
+    push: () => 'レジスタをスタックに保存',
+    pop: () => 'スタックからレジスタを復元',
+    ldm: () => '複数レジスタをメモリからロード',
+    stm: () => '複数レジスタをメモリにストア',
+    condFalse: () => '条件不成立、次へ',
+    branch: () => '分岐',
+    call: () => '関数呼び出し（LRに戻りアドレスを保存）',
+    bxRet: () => 'レジスタにジャンプ（関数復帰）',
+    cbz: () => 'ゼロ比較分岐',
+    nop: () => '何もしない',
+  },
+  en: {
+    mov: (dst, f) => `Move to ${dst}${f ? ' (with flags)' : ''}`,
+    add: (f) => f ? 'Add (with flags)' : 'Add',
+    sub: (f) => f ? 'Subtract (with flags)' : 'Subtract',
+    mul: (f) => f ? 'Multiply (with flags)' : 'Multiply',
+    div: () => 'Divide',
+    bitwise: (f) => f ? 'Bitwise operation (with flags)' : 'Bitwise operation',
+    shift: (f) => f ? 'Shift (with flags)' : 'Shift',
+    cmp: () => 'Compare (flags only)',
+    ldrLiteral: () => 'Load from literal pool',
+    ldr: (wb, pi) => wb ? 'Load from memory (write-back)' : pi ? 'Load from memory (post-index)' : 'Load from memory',
+    str: (wb, pi) => wb ? 'Store to memory (write-back)' : pi ? 'Store to memory (post-index)' : 'Store to memory',
+    push: () => 'Push registers to stack',
+    pop: () => 'Pop registers from stack',
+    ldm: () => 'Load multiple registers',
+    stm: () => 'Store multiple registers',
+    condFalse: () => 'Condition not met, skip',
+    branch: () => 'Branch',
+    call: () => 'Function call (save return address to LR)',
+    bxRet: () => 'Return (jump to register)',
+    cbz: () => 'Compare and branch if zero/nonzero',
+    nop: () => 'No operation',
+  },
+}
+
 // フレームポインタ・スタックポインタを base に使う [] はポインタ参照ではなくローカル変数アクセス
 const FRAME_REGS_ARM = new Set(['sp', 'fp', 'r7', 'r11'])
 
@@ -242,6 +366,7 @@ function checkCond(c: string, state: MachineState): boolean {
 function handleDataTransfer(
   mnemonic: string, sFlag: boolean, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'MOV' && mnemonic !== 'MVN') return null
   const dst = operands[0]
@@ -261,7 +386,7 @@ function handleDataTransfer(
       : `${dst.name} ← ${fmtDec(val)}`
   return {
     update,
-    explain: `${opLabel(dst)} に値をセット${sFlag ? '（フラグ更新）' : ''}`,
+    explain: ARM_EXPLAINS[locale].mov(opLabel(dst), sFlag),
     effect: `${dst.name} ← ${fmtVal(dst.name, val)}`,
     comment,
     phase, nextInstrIdx: defaultNext,
@@ -274,6 +399,7 @@ function handleDataTransfer(
 function handleAdd(
   mnemonic: string, sFlag: boolean, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'ADD' && mnemonic !== 'ADC') return null
   const dst = operands[0]
@@ -294,7 +420,7 @@ function handleAdd(
     : `${dst.name} ← ${aLabel} + ${bLabel}${c ? ' + carry' : ''} = ${fmtDec(result)}`
   return {
     update,
-    explain: `加算${sFlag ? '（フラグ更新）' : ''}`,
+    explain: ARM_EXPLAINS[locale].add(sFlag),
     effect: exprStr,
     comment: exprStr,
     phase, nextInstrIdx: defaultNext,
@@ -307,6 +433,7 @@ function handleAdd(
 function handleSub(
   mnemonic: string, sFlag: boolean, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'SUB' && mnemonic !== 'SBC' && mnemonic !== 'RSB') return null
   const dst = operands[0]
@@ -329,7 +456,7 @@ function handleSub(
       : `${dst.name} ← ${aLabel} - ${bLabel}${borrow ? ' - borrow' : ''} = ${fmtDec(result)}`
   return {
     update,
-    explain: `減算${sFlag ? '（フラグ更新）' : ''}`,
+    explain: ARM_EXPLAINS[locale].sub(sFlag),
     effect: exprStr,
     comment: exprStr,
     phase, nextInstrIdx: defaultNext,
@@ -342,6 +469,7 @@ function handleSub(
 function handleMul(
   mnemonic: string, sFlag: boolean, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'MUL' && mnemonic !== 'MLA' && mnemonic !== 'MLS') return null
   const dst = operands[0]
@@ -361,7 +489,7 @@ function handleMul(
     : `${dst.name} ← ${aLabel} × ${bLabel} ${mnemonic === 'MLA' ? '+' : '-'} ${fmtDec(acc)} = ${fmtDec(result)}`
   return {
     update: { ...setRegUpdate(dst.name, result), pc: BASE_PC + defaultNext * 4 },
-    explain: `乗算${sFlag ? '（フラグ更新）' : ''}`,
+    explain: ARM_EXPLAINS[locale].mul(sFlag),
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
@@ -374,6 +502,7 @@ function handleMul(
 function handleDiv(
   mnemonic: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'SDIV' && mnemonic !== 'UDIV') return null
   const dst = operands[0]
@@ -389,7 +518,7 @@ function handleDiv(
   const comment = `${dst.name} ← ${aLabel} ÷ ${bLabel} = ${fmtDec(result)}`
   return {
     update: { ...setRegUpdate(dst.name, result), pc: BASE_PC + defaultNext * 4 },
-    explain: `除算`,
+    explain: ARM_EXPLAINS[locale].div(),
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
@@ -402,6 +531,7 @@ function handleDiv(
 function handleBitwise(
   mnemonic: string, sFlag: boolean, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'AND' && mnemonic !== 'ORR' && mnemonic !== 'EOR' && mnemonic !== 'BIC') return null
   const dst = operands[0]
@@ -424,7 +554,7 @@ function handleBitwise(
   const comment = `${dst.name} ← ${aLabel} ${opSym} ${bLabel} = 0x${result.toString(16)}`
   return {
     update,
-    explain: `ビット演算${sFlag ? '（フラグ更新）' : ''}`,
+    explain: ARM_EXPLAINS[locale].bitwise(sFlag),
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
@@ -437,6 +567,7 @@ function handleBitwise(
 function handleShift(
   mnemonic: string, sFlag: boolean, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'LSL' && mnemonic !== 'LSR' && mnemonic !== 'ASR' && mnemonic !== 'ROR') return null
   const dst = operands[0]
@@ -459,7 +590,7 @@ function handleShift(
   const comment = `${dst.name} ← ${srcLabel} ${sym} ${shamt} = ${fmtDec(result)}`
   return {
     update,
-    explain: `シフト演算${sFlag ? '（フラグ更新）' : ''}`,
+    explain: ARM_EXPLAINS[locale].shift(sFlag),
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
@@ -472,6 +603,7 @@ function handleShift(
 function handleCompare(
   mnemonic: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'CMP' && mnemonic !== 'CMN' && mnemonic !== 'TST' && mnemonic !== 'TEQ') return null
   const src1 = operands[0]
@@ -493,9 +625,9 @@ function handleCompare(
   const flagStr = `Z=${flags.zero ? 1 : 0} N=${flags.negative ? 1 : 0} C=${flags.carry ? 1 : 0} V=${flags.overflow ? 1 : 0}`
   return {
     update: { flags, pc: BASE_PC + defaultNext * 4 },
-    explain: `比較（フラグのみ更新）`,
+    explain: ARM_EXPLAINS[locale].cmp(),
     effect: flagStr,
-    comment: `${aLabel} と ${bLabel} を比較: ${flagStr}`,
+    comment: ARM_COMMENTS[locale].compare(aLabel, bLabel, flagStr),
     phase, nextInstrIdx: defaultNext,
   }
 }
@@ -506,7 +638,7 @@ function handleCompare(
 function handleLoad(
   mnemonic: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
-  dataLabels: Map<string, number>,
+  dataLabels: Map<string, number>, locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'LDR' && mnemonic !== 'LDRB' && mnemonic !== 'LDRH') return null
   const dst = operands[0]
@@ -521,7 +653,7 @@ function handleLoad(
     const comment = `${dst.name} ← ${fmtDec(val)}（定数プール）`
     return {
       update: { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 },
-      explain: 'リテラルプールから定数をロード',
+      explain: ARM_EXPLAINS[locale].ldrLiteral(),
       effect: comment,
       comment,
       phase, nextInstrIdx: defaultNext,
@@ -536,11 +668,10 @@ function handleLoad(
   if (src.writeBack) Object.assign(update, setRegUpdate(src.base, addr))
   if (src.postIndex !== undefined) Object.assign(update, setRegUpdate(src.base, baseVal + src.postIndex))
   const memDesc = fmtMA(src.base, src.postIndex !== undefined ? 0 : src.offset, baseVal)
-  const extra = src.writeBack ? '（ライトバック）' : src.postIndex !== undefined ? '（ポストインデックス）' : ''
   const comment = `${dst.name} ← ${memDesc}(${fmtDec(val)})`
   return {
     update,
-    explain: `メモリからロード${extra}`,
+    explain: ARM_EXPLAINS[locale].ldr(src.writeBack ?? false, src.postIndex !== undefined),
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
@@ -554,6 +685,7 @@ function handleLoad(
 function handleStore(
   mnemonic: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic !== 'STR' && mnemonic !== 'STRB' && mnemonic !== 'STRH') return null
   const src = operands[0]
@@ -568,11 +700,10 @@ function handleStore(
   if (dst.writeBack) Object.assign(update, setRegUpdate(dst.base, addr))
   if (dst.postIndex !== undefined) Object.assign(update, setRegUpdate(dst.base, baseVal + dst.postIndex))
   const memDesc = fmtMA(dst.base, dst.postIndex !== undefined ? 0 : dst.offset, baseVal)
-  const extra = dst.writeBack ? '（ライトバック）' : dst.postIndex !== undefined ? '（ポストインデックス）' : ''
   const comment = `${memDesc} ← ${fmtRV(src.name, val)}`
   return {
     update,
-    explain: `メモリにストア${extra}`,
+    explain: ARM_EXPLAINS[locale].str(dst.writeBack ?? false, dst.postIndex !== undefined),
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
@@ -586,7 +717,7 @@ function handleStore(
 function handleStack(
   mnemonic: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
-  instrCount: number,
+  instrCount: number, locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic === 'PUSH') {
     const reglist = operands[0]
@@ -605,9 +736,9 @@ function handleStack(
     const regLabels = regs.map(r => fmtRV(r, getReg(r, state))).join(', ')
     return {
       update: { sp: newSp, stackSet, metaSet, frames, pc: BASE_PC + defaultNext * 4 },
-      explain: `レジスタをスタックに保存`,
+      explain: ARM_EXPLAINS[locale].push(),
       effect: `sp ← ${hexU32(newSp)}; [sp] ← ${regLabels}`,
-      comment: `${regLabels} をスタックに保存`,
+      comment: ARM_COMMENTS[locale].push(regLabels),
       phase, nextInstrIdx: defaultNext,
     }
   }
@@ -657,9 +788,9 @@ function handleStack(
     if (newLr !== undefined) update.lr = newLr
     return {
       update,
-      explain: `スタックからレジスタを復元`,
+      explain: ARM_EXPLAINS[locale].pop(),
       effect: `${popLabels} ← [旧sp]; sp ← ${hexU32(sp)}`,
-      comment: `スタックから ${popLabels} を復元`,
+      comment: ARM_COMMENTS[locale].pop(popLabels),
       phase: retPhase ? 'ret' : phase,
       nextInstrIdx: nextIdx,
     }
@@ -677,6 +808,7 @@ function handleStack(
 function handleLDMSTM(
   mnemonic: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   const isLDM = mnemonic === 'LDM' || mnemonic === 'LDMIA' || mnemonic === 'LDMFD'
   const isSTM = mnemonic === 'STM' || mnemonic === 'STMIA' || mnemonic === 'STMEA'
@@ -700,7 +832,7 @@ function handleLDMSTM(
     const comment = `${regs.join(', ')} ← [${hexU32(baseAddr)}+]`
     return {
       update: { regs: newRegs, pc: BASE_PC + defaultNext * 4 },
-      explain: '複数レジスタをメモリからロード',
+      explain: ARM_EXPLAINS[locale].ldm(),
       effect: comment,
       comment,
       phase, nextInstrIdx: defaultNext,
@@ -719,7 +851,7 @@ function handleLDMSTM(
   const comment = `[${hexU32(baseAddr)}+] ← ${regs.join(', ')}`
   return {
     update: { stackSet, metaSet, pc: BASE_PC + defaultNext * 4 },
-    explain: '複数レジスタをメモリにストア',
+    explain: ARM_EXPLAINS[locale].stm(),
     effect: comment,
     comment,
     phase, nextInstrIdx: defaultNext,
@@ -733,15 +865,16 @@ function handleBranch(
   mnemonic: string, cond: string, operands: Operand[],
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
   labels: Map<string, number>, instrCount: number, callDepth: number,
+  locale: Locale,
 ): InterpretResult | { error: string } | null {
   if (mnemonic === 'B') {
     const taken = checkCond(cond, state)
     if (!taken) {
       return {
         update: { pc: BASE_PC + defaultNext * 4 },
-        explain: `条件不成立、次へ`,
-        effect: `${cond} 不成立、スキップ`,
-        comment: `${cond} 不成立、スキップ`,
+        explain: ARM_EXPLAINS[locale].condFalse(),
+        effect: ARM_COMMENTS[locale].condSkip(cond),
+        comment: ARM_COMMENTS[locale].condSkip(cond),
         phase, nextInstrIdx: defaultNext,
       }
     }
@@ -749,12 +882,13 @@ function handleBranch(
     if (labelOp?.type !== 'label') return { error: `B: ラベルが必要: ${raw}` }
     const target = labels.get(labelOp.name)
     if (target === undefined) return { error: `B: 未定義ラベル: ${labelOp.name}` }
-    const condStr = cond === 'AL' ? '' : `${cond} 成立、`
     return {
       update: { pc: BASE_PC + target * 4 },
-      explain: `分岐`,
+      explain: ARM_EXPLAINS[locale].branch(),
       effect: `PC ← ${labelOp.name}(${hexU32(BASE_PC + target * 4)})`,
-      comment: `${condStr}${labelOp.name} へ分岐`,
+      comment: cond === 'AL'
+        ? ARM_COMMENTS[locale].branch(labelOp.name)
+        : ARM_COMMENTS[locale].branchCond(cond, labelOp.name),
       phase, nextInstrIdx: target,
     }
   }
@@ -773,9 +907,9 @@ function handleBranch(
     const newFrame: StackFrame = { name: labelOp.name, lo: state.sp, hi: state.sp, color: newColor }
     return {
       update: { lr: retAddr, frames: [...state.frames, newFrame], pc: targetAddr },
-      explain: `関数呼び出し（LRに戻りアドレスを保存）`,
+      explain: ARM_EXPLAINS[locale].call(),
       effect: `LR ← ${hexU32(retAddr)}, PC ← ${labelOp.name}`,
-      comment: `${labelOp.name}() を呼び出し（LR=${hexU32(retAddr)}）`,
+      comment: ARM_COMMENTS[locale].call(labelOp.name, hexU32(retAddr)),
       phase, nextInstrIdx: target,
     }
   }
@@ -790,9 +924,9 @@ function handleBranch(
     const frames = state.frames.length > 1 ? state.frames.slice(0, -1) : [...state.frames]
     return {
       update: { frames, pc: lrVal },
-      explain: `レジスタにジャンプ（関数復帰）`,
+      explain: ARM_EXPLAINS[locale].bxRet(),
       effect: `PC ← ${fmtRV(reg.name, lrVal)}`,
-      comment: `${fmtRV(reg.name, lrVal)} へ戻る（関数復帰）`,
+      comment: ARM_COMMENTS[locale].ret(fmtRV(reg.name, lrVal)),
       phase: 'ret', nextInstrIdx: nextIdx,
     }
   }
@@ -812,17 +946,17 @@ function handleBranch(
     const regLabel = fmtRV(reg.name, val)
     const comment = taken
       ? mnemonic === 'CBZ'
-        ? `${regLabel} = 0、${labelOp.name} へ分岐`
-        : `${regLabel} ≠ 0、${labelOp.name} へ分岐`
+        ? ARM_COMMENTS[locale].cbzTaken(regLabel, labelOp.name)
+        : ARM_COMMENTS[locale].cbnzTaken(regLabel, labelOp.name)
       : mnemonic === 'CBZ'
-        ? `${regLabel} ≠ 0、スキップ`
-        : `${regLabel} = 0、スキップ`
+        ? ARM_COMMENTS[locale].cbzSkip(regLabel)
+        : ARM_COMMENTS[locale].cbnzSkip(regLabel)
     const effect = taken
       ? `PC ← ${labelOp.name}(${hexU32(BASE_PC + target * 4)})`
       : `スキップ`
     return {
       update: { pc: BASE_PC + target * 4 },
-      explain: `ゼロ比較分岐`,
+      explain: ARM_EXPLAINS[locale].cbz(),
       effect,
       comment,
       phase, nextInstrIdx: target,
@@ -855,6 +989,7 @@ export function interpretInstruction(
   dataLabels: Map<string, number>,
   instrCount: number,
   callDepth: number,
+  locale: Locale = 'ja',
 ): InterpretResult | { error: string } {
   const { mnemonic, cond, sFlag, operands } = instr
   const phase: Phase = callDepth === 0 ? 'caller' : 'callee'
@@ -862,24 +997,24 @@ export function interpretInstruction(
   const raw = instr.raw
 
   return (
-    handleDataTransfer(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
-    handleAdd(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
-    handleSub(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
-    handleMul(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
-    handleDiv(mnemonic, operands, state, phase, defaultNext, raw) ??
-    handleBitwise(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
-    handleShift(mnemonic, sFlag, operands, state, phase, defaultNext, raw) ??
-    handleCompare(mnemonic, operands, state, phase, defaultNext, raw) ??
-    handleLoad(mnemonic, operands, state, phase, defaultNext, raw, dataLabels) ??
-    handleStore(mnemonic, operands, state, phase, defaultNext, raw) ??
-    handleStack(mnemonic, operands, state, phase, defaultNext, raw, instrCount) ??
-    handleLDMSTM(mnemonic, operands, state, phase, defaultNext, raw) ??
-    handleBranch(mnemonic, cond, operands, state, phase, defaultNext, raw, labels, instrCount, callDepth) ??
+    handleDataTransfer(mnemonic, sFlag, operands, state, phase, defaultNext, raw, locale) ??
+    handleAdd(mnemonic, sFlag, operands, state, phase, defaultNext, raw, locale) ??
+    handleSub(mnemonic, sFlag, operands, state, phase, defaultNext, raw, locale) ??
+    handleMul(mnemonic, sFlag, operands, state, phase, defaultNext, raw, locale) ??
+    handleDiv(mnemonic, operands, state, phase, defaultNext, raw, locale) ??
+    handleBitwise(mnemonic, sFlag, operands, state, phase, defaultNext, raw, locale) ??
+    handleShift(mnemonic, sFlag, operands, state, phase, defaultNext, raw, locale) ??
+    handleCompare(mnemonic, operands, state, phase, defaultNext, raw, locale) ??
+    handleLoad(mnemonic, operands, state, phase, defaultNext, raw, dataLabels, locale) ??
+    handleStore(mnemonic, operands, state, phase, defaultNext, raw, locale) ??
+    handleStack(mnemonic, operands, state, phase, defaultNext, raw, instrCount, locale) ??
+    handleLDMSTM(mnemonic, operands, state, phase, defaultNext, raw, locale) ??
+    handleBranch(mnemonic, cond, operands, state, phase, defaultNext, raw, labels, instrCount, callDepth, locale) ??
     (mnemonic === 'NOP' ? {
       update: { pc: BASE_PC + defaultNext * 4 },
-      explain: '何もしない',
+      explain: ARM_EXPLAINS[locale].nop(),
       effect: '（処理なし）',
-      comment: '（何もしない）',
+      comment: ARM_COMMENTS[locale].nop,
       phase, nextInstrIdx: defaultNext,
     } : { error: `未対応の命令: ${mnemonic} (${raw})` })
   )

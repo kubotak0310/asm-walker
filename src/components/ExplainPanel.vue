@@ -1,12 +1,12 @@
 <template>
   <div class="bg-gray-800 rounded-lg border border-gray-700">
-    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold rounded-t-lg">命令詳細</div>
+    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold rounded-t-lg">{{ $t('explainPanel.header') }}</div>
     <div class="p-4 min-h-24">
     <!-- HWステップ -->
     <div v-if="step?.type === 'hw'" class="space-y-3">
       <div class="flex items-center gap-2 bg-orange-900/40 border border-orange-700 rounded px-3 py-2">
         <span class="text-orange-400 font-bold">⚡</span>
-        <span class="text-orange-200 text-sm font-bold">ハードウェアが自動実行 — アセンブラ命令は存在しません</span>
+        <span class="text-orange-200 text-sm font-bold">{{ $t('explainPanel.hwAuto') }}</span>
       </div>
       <p class="text-gray-200 text-sm">{{ step.explain }}</p>
       <p class="text-gray-300 text-xs font-mono">{{ step.effect }}</p>
@@ -28,7 +28,7 @@
             v-if="showHelp"
             class="absolute top-6 left-0 z-50 w-[480px] bg-gray-900 border border-gray-600 rounded-lg p-3 shadow-xl"
           >
-            <p class="text-gray-300 text-xs font-bold mb-2">構文記法ガイド</p>
+            <p class="text-gray-300 text-xs font-bold mb-2">{{ $t('explainPanel.syntaxGuide') }}</p>
             <table class="w-full text-xs border-collapse table-fixed">
               <colgroup>
                 <col class="w-28" />
@@ -45,7 +45,7 @@
             </table>
           </div>
         </div>
-        <span v-if="step.isArr" class="text-xs bg-green-800 text-green-200 px-1.5 py-0.5 rounded">配列要素</span>
+        <span v-if="step.isArr" class="text-xs bg-green-800 text-green-200 px-1.5 py-0.5 rounded">{{ $t('explainPanel.arrayBadge') }}</span>
       </div>
       <p class="text-gray-200 text-sm pl-2">
         <span v-if="step.fullName" class="text-blue-400 font-bold tracking-wide">{{ step.fullName }}</span>
@@ -55,13 +55,13 @@
       <p class="text-gray-300 text-xs font-mono pl-2">{{ step.effect }}</p>
 
       <div v-if="step.isArr" class="bg-green-900/30 border border-green-800 rounded p-2 text-xs text-green-200">
-        💡 配列要素: ベースアドレス + オフセットで各要素にアクセスします
+        💡 {{ $t('explainPanel.arrayTip') }}
       </div>
     </div>
 
     <!-- 全ステップ完了 -->
     <div v-else class="text-gray-500 text-sm flex items-center gap-2">
-      <span>✓ 全ステップ完了 — 「戻る」で見直せます</span>
+      <span>{{ $t('explainPanel.done') }}</span>
     </div>
     </div>
   </div>
@@ -69,11 +69,13 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSimulator } from '@/composables/useSimulator'
 import { getFullName as getFullNameARM, getSyntax as getSyntaxARM } from '@/core/arm/mnemonics'
 import { getFullName as getFullNameX86, getSyntax as getSyntaxX86 } from '@/core/x86/mnemonics'
 
 const { arch, currentStepData, preset } = useSimulator()
+const { tm } = useI18n()
 
 function getFullName(instr: string): string | undefined {
   return arch.value === 'x86' ? getFullNameX86(instr) : getFullNameARM(instr)
@@ -95,33 +97,10 @@ onMounted(() => document.addEventListener('click', onDocClick))
 onUnmounted(() => document.removeEventListener('click', onDocClick))
 watch(currentStepData, () => { showHelp.value = false })
 
-const HELP_ROWS_ARM = [
-  { sym: '{S}',      desc: '省略可能なSサフィックス。付けるとフラグ更新',  ex: 'MOV / MOVS' },
-  { sym: '{ }',      desc: '省略可能な要素',                               ex: '{, #offset}' },
-  { sym: '[ ]',      desc: 'メモリアドレスを参照（デリファレンス）',        ex: '[SP, #4]' },
-  { sym: 'Rd',       desc: '宛先レジスタ (Destination)',                   ex: '' },
-  { sym: 'Rn',       desc: 'ベース / 第1ソースレジスタ',                   ex: '' },
-  { sym: 'Rm',       desc: '第2ソースレジスタ',                            ex: '' },
-  { sym: 'Rt',       desc: '転送レジスタ (Transfer) — LDR/STR',           ex: '' },
-  { sym: 'Ra',       desc: '積算レジスタ (Accumulate) — MLA/MLS',         ex: '' },
-  { sym: '#imm',     desc: '即値リテラル (Immediate)',                      ex: '#16, #0x10' },
-  { sym: 'reglist',  desc: 'レジスタリスト（{ }は構文の一部）',             ex: '{R0, R1, LR}' },
-]
-
-const HELP_ROWS_X86 = [
-  { sym: 'Rd',          desc: '宛先レジスタ (Destination)',                ex: 'rax, rbx' },
-  { sym: 'Rs',          desc: 'ソースレジスタ (Source)',                   ex: 'rcx, rdx' },
-  { sym: 'imm',         desc: '即値リテラル (Immediate)  ※ # なし',       ex: '5, 0x10, -4' },
-  { sym: '[mem]',       desc: 'メモリアドレスを参照（デリファレンス）',     ex: '[rbp-4]' },
-  { sym: 'r/m',         desc: 'レジスタ または メモリのどちらでも可',       ex: 'rax / [rbp-8]' },
-  { sym: 'BYTE PTR',    desc: '1バイト幅でメモリ参照',                     ex: 'BYTE PTR [rax]' },
-  { sym: 'DWORD PTR',   desc: '4バイト幅でメモリ参照',                     ex: 'DWORD PTR [rbp-4]' },
-  { sym: 'QWORD PTR',   desc: '8バイト幅でメモリ参照',                     ex: 'QWORD PTR [rsp]' },
-  { sym: 'cc',          desc: '条件コード (e=等, ne=不等, l=小, g=大…)',   ex: 'je, jne, jl, jg' },
-]
-
-const HELP_ROWS = computed(() => arch.value === 'x86' ? HELP_ROWS_X86 : HELP_ROWS_ARM)
-
+const HELP_ROWS = computed(() => {
+  const key = arch.value === 'x86' ? 'explainPanel.helpX86' : 'explainPanel.helpArm'
+  return tm(key) as { sym: string; desc: string; ex: string }[]
+})
 
 const step = computed(() => {
   const s = currentStepData.value

@@ -1,4 +1,5 @@
 import { ref, computed, watch } from 'vue'
+import { i18n } from '@/i18n'
 import type { MachineState, Arch, PresetData } from '@/core/types'
 import { BASE_SP_ARM, BASE_PC_ARM, BASE_SP_X86, BASE_PC_X86, MAX_TRACE_STEPS, ARG_REGS } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
@@ -415,7 +416,8 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         compileError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
         return
       }
-      const result = traceProgram(parseResult, INITIAL_STATE, MAX_TRACE_STEPS, output.cLineMap)
+      const locale = i18n.global.locale.value === 'ja' ? 'ja' : 'en'
+      const result = traceProgram(parseResult, INITIAL_STATE, MAX_TRACE_STEPS, output.cLineMap, locale)
       compileError.value = result.error ?? null
       states.value = result.states
       preset.value = {

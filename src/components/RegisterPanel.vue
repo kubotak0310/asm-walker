@@ -1,6 +1,6 @@
 <template>
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">汎用レジスタ</div>
+    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">{{ $t('registerPanel.header') }}</div>
     <div class="p-2 grid grid-cols-2 gap-y-1 gap-x-6 font-mono text-xs">
       <div
         v-for="reg in registers"
@@ -15,11 +15,11 @@
           <span
             v-if="isReturnStep && reg.name === returnReg"
             class="ml-1 bg-yellow-700/70 text-yellow-200 px-1 rounded text-xs align-middle"
-          >戻り値</span>
+          >{{ $t('registerPanel.returnBadge') }}</span>
           <span
             v-else-if="argBadgeIndex(reg.name) !== null"
             class="ml-1 bg-blue-700/70 text-blue-200 px-1 rounded text-xs align-middle"
-          >引数{{ argBadgeIndex(reg.name)! + 1 }}</span>
+          >{{ $t('registerPanel.argBadge') }}{{ argBadgeIndex(reg.name)! + 1 }}</span>
           <span
             v-else-if="currentStepData?.ptrReg === reg.name"
             class="ml-1 bg-purple-700/70 text-purple-200 px-1 rounded text-xs align-middle"
@@ -88,5 +88,4 @@ function valueClass(name: string): string {
   if (changed(name)) return 'text-green-300 font-bold'
   return 'text-gray-300'
 }
-
 </script>

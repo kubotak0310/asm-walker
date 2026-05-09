@@ -1,13 +1,11 @@
 <template>
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">スタックフレーム</div>
+    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">{{ $t('frameViz.header') }}</div>
     <div class="p-3 space-y-2">
-      <!-- No frames -->
       <div v-if="frames.length === 0" class="text-gray-600 text-xs text-center py-4">
-        フレームなし
+        {{ $t('frameViz.empty') }}
       </div>
 
-      <!-- Frames (highest frame = deepest call = top of display) -->
       <TransitionGroup name="frame">
         <div
           v-for="frame in reversedFrames"

@@ -10,6 +10,7 @@
 | 言語 | TypeScript | 命令パーサーの型安全性が重要 |
 | スタイリング | Tailwind CSS | ユーティリティファースト・レスポンシブ対応が容易 |
 | コードエディタ | CodeMirror 6 | シンタックスハイライト・フェーズ2の自由入力に対応 |
+| 国際化 | vue-i18n v11 | EN/JA 言語切り替え（Composition API、`useI18n()`）|
 | バックエンド（将来）| Vercel Serverless Functions | コード保存・共有機能（Supabase連携） |
 | 認証・DB（将来） | Supabase | Auth + PostgreSQL でコード保存・共有 |
 | デプロイ | Vercel | フロントのみなら無料・自動デプロイ・カスタムドメイン対応 |
@@ -23,11 +24,12 @@
 asm-walker/
 ├── src/
 │   ├── components/
+│   │   ├── AppHeader.vue           # ヘッダー（ロゴ・EN/JA トグル・ガイドドロップダウン）
 │   │   ├── ArchSwitch.vue          # x86 / ARM 切り替えスイッチ
 │   │   ├── StepController.vue      # ◀ 戻る / 次のステップ ▶ / リセット / ステップカウンター（← → キーショートカット付き）
 │   │   ├── CSourcePanel.vue        # Cソース表示（コンパイル後のみ表示）
 │   │   ├── CodePanel.vue           # アセンブラ表示（PCアドレス付き、コメントは `;` 区切り）
-│   │   ├── ExplainPanel.vue        # 命令の日本語説明（フルネーム・構文フォーマット・記法ヘルプ付き）
+│   │   ├── ExplainPanel.vue        # 命令の説明（フルネーム・構文フォーマット・記法ヘルプ付き、EN/JA対応）
 │   │   ├── RegisterPanel.vue       # 汎用レジスタ表示（ARM ABI 引数/戻り値バッジ付き）
 │   │   ├── SpecialRegPanel.vue     # SP / LR / PC / Mode 表示
 │   │   ├── StackPanel.vue          # スタックメモリ表示（未初期化スロット表示対応）
@@ -48,8 +50,14 @@ asm-walker/
 │   │       ├── interpreter.ts      # X86Instruction + MachineState → X86InterpretResult（30種以上の命令）
 │   │       ├── tracer.ts           # x86 動的実行トレーサー（CALL/RET スタック追跡）
 │   │       └── mnemonics.ts        # x86命令フルネーム・構文フォーマットテーブル
+│   ├── i18n/
+│   │   ├── index.ts                # createI18n 初期化（ブラウザ言語検出・localStorage 永続化）
+│   │   └── locales/
+│   │       ├── ja.ts               # 日本語ロケール定義
+│   │       └── en.ts               # 英語ロケール定義
 │   ├── samples/
 │   │   └── index.ts                # ARM_SAMPLES / X86_SAMPLES（各5種、SampleDef型）
+│   │                               # SampleDef.name は { ja: string; en: string } 形式
 │   ├── composables/
 │   │   └── useSimulator.ts         # シミュレーター・アーキ状態管理（Vue Composable、シングルトン）
 │   ├── App.vue
@@ -161,18 +169,22 @@ interface ParseResult {
 
 ### interpreter.ts — 命令実行
 
-- `interpretInstruction(instr, instrIndex, state, labels): InterpretResult`
+- `interpretInstruction(instr, instrIndex, state, labels, locale): InterpretResult`
+- `locale: Locale = 'ja'` パラメータで `comment` / `explain` の言語を切り替え（`'ja' | 'en'`）
+- `ARM_COMMENTS`: 13エントリのロケール別 comment テンプレート辞書（CodePanel インライン表示用）
+- `ARM_EXPLAINS`: 21エントリのロケール別 explain テンプレート辞書（ExplainPanel 上段表示用）
 - `comment`: CodePanel インライン表示用の簡潔な注釈（`r0 ← 3`、`[r7+4]=0x20007fec ← r0(3)` など `←` 記法で統一）
 - `effect`: ExplainPanel 下段表示用（`comment` と同形式）
-- `explain`: ExplainPanel 上段の日本語説明（`ADD : 加算` のように fullName と連結表示）
-- S-suffix命令はフラグ更新 + explain に「（フラグ更新）」追記
+- `explain`: ExplainPanel 上段の説明（`ADD : 加算` のように fullName と連結表示、ロケール対応）
+- S-suffix命令はフラグ更新 + explain に「（フラグ更新）」/ "(with flags)" 追記
 
 ### tracer.ts — 動的実行
 
-- `traceProgram(parseResult, initialState, maxSteps=200, cLineMap?: Map<number, number>): TraceResult`
+- `traceProgram(parseResult, initialState, maxSteps=200, cLineMap?: Map<number, number>, locale?: Locale): TraceResult`
 - `main:` エントリポイントから開始（なければ先頭から）
 - 200ステップ超過で無限ループ検出エラー
 - `cLineMap`: Godbolt の asmLineIndex → Cソース行番号（0-based）のマッピング（省略時は全行 cLine=0）
+- `locale`: `interpretInstruction` に伝播（`useSimulator.ts` から `i18n.global.locale.value` を受け取る）
 
 ---
 

@@ -1,7 +1,7 @@
 <template>
   <div class="bg-gray-800 rounded-lg border border-gray-700">
     <div class="px-3 py-2 bg-gray-700 rounded-t-lg flex items-center justify-between">
-      <span class="text-gray-300 text-xs font-bold">アセンブラ</span>
+      <span class="text-gray-300 text-xs font-bold">{{ $t('codePanel.header') }}</span>
       <div class="flex items-center gap-2">
         <span
           v-if="pcDisplay?.mode === 'address'"
@@ -10,7 +10,7 @@
           PC → {{ hexU32(pcDisplay.value) }}
         </span>
         <span v-else-if="pcDisplay?.mode === 'hw'" class="text-xs text-orange-400">
-          PC → HW処理中
+          {{ $t('codePanel.hwLabel') }}
         </span>
         <div v-if="preset?.asmCode?.length" class="relative flex items-center">
           <Transition name="fade">
@@ -18,7 +18,7 @@
           </Transition>
           <button
             @click="copyAsm"
-            title="アセンブラをコピー"
+            :title="$t('codePanel.copyTitle')"
             class="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-600 transition-colors"
           >
             <span class="material-icons text-base text-gray-400">content_copy</span>
@@ -32,17 +32,14 @@
           :data-asm-line="i"
           :class="outerLineClass(line, i)"
         >
-          <!-- Section header -->
           <template v-if="line.isHeader">
             <span :class="[phaseColor(line.phase), unreachableInfo.lines.has(i) ? 'opacity-40' : '']">{{ line.text }}</span>
           </template>
 
-          <!-- Empty line -->
           <template v-else-if="!line.text.trim()">
             <span class="text-transparent select-none">·</span>
           </template>
 
-          <!-- Executable instruction -->
           <template v-else>
             <span
               :class="[
@@ -72,12 +69,11 @@
           </template>
         </div>
 
-        <!-- Unreachable block end note -->
         <div
           v-if="unreachableInfo.blockEnds.has(i)"
           class="text-xs text-gray-600 italic px-2 py-1 mb-1 border-l-2 border-gray-700"
         >
-          ↑ この関数はシミュレーション中に実行されません（最適化によりインライン展開された可能性があります）
+          {{ $t('codePanel.unreachable') }}
         </div>
       </template>
     </div>
@@ -97,15 +93,10 @@ const asmCodeEl = ref<HTMLElement | null>(null)
 const activeAsmLine = computed(() => currentStepData.value?.asmLine ?? -1)
 const isHW = computed(() => currentStepData.value?.type === 'hw')
 
-// 各行の「最後に実行された時点のコメント」を保持するマップ。
-// 関数の再呼び出し（同じエントリ asmLine に2回目に到達）を検出したとき、
-// その関数のコメントをすべて消去してから再積み上げる。
 const lineCommentMap = computed(() => {
   const map = new Map<number, string>()
   const steps = preset.value?.steps ?? []
-  // phase → 最初に到達した asmLine（関数エントリポイント）
   const phaseEntryLine = new Map<string, number>()
-  // phase → 現在の呼び出しで書き込んだ asmLine の集合
   const phaseActiveLines = new Map<string, Set<number>>()
 
   for (let i = 0; i <= currentStep.value; i++) {
@@ -117,7 +108,6 @@ const lineCommentMap = computed(() => {
     if (!phaseEntryLine.has(phase)) {
       phaseEntryLine.set(phase, step.asmLine)
     } else if (phaseEntryLine.get(phase) === step.asmLine && phaseActiveLines.get(phase)!.size > 0) {
-      // 同じエントリポイントに再到達 = 新しい呼び出し → 前回分を全消去
       for (const line of phaseActiveLines.get(phase)!) map.delete(line)
       phaseActiveLines.get(phase)!.clear()
     }
@@ -130,7 +120,6 @@ const lineCommentMap = computed(() => {
   return map
 })
 
-// テンプレートの複合条件式をscript側に集約
 const pcDisplay = computed(() => {
   if (activeAsmLine.value >= 0 && lineAddrs.value[activeAsmLine.value] !== undefined)
     return { mode: 'address' as const, value: lineAddrs.value[activeAsmLine.value]! }
@@ -152,7 +141,6 @@ const unreachableInfo = computed(() => {
   if (!p) return { lines: new Set<number>(), blockEnds: new Set<number>() }
   const executed = executedLines.value
 
-  // Split asmCode into segments separated by section headers
   const segments: number[][] = []
   let seg: number[] = []
   for (let i = 0; i < p.asmCode.length; i++) {
@@ -181,7 +169,6 @@ const unreachableInfo = computed(() => {
 const lineAddrs = computed<Record<number, number>>(() => {
   const p = preset.value
   if (!p) return {}
-  // Build address map from step execution (for x86 presets with non-sequential PCs)
   const stepAddrMap: Record<number, number> = {}
   let prevPc = p.initialState.pc
   for (const step of p.steps) {
@@ -191,10 +178,6 @@ const lineAddrs = computed<Record<number, number>>(() => {
     prevPc = step.update.pc ?? prevPc + 4
   }
 
-  // Assign addresses: stepAddrMap for executed lines, sequential fallback for others.
-  // Sequential fallback (BASE_PC + instrIdx * 4) matches the ARM tracer model and
-  // correctly handles functions that are present in the assembly but not called
-  // (e.g. when the compiler inlines a call at -O1).
   const result: Record<number, number> = {}
   let instrIdx = 0
   for (let i = 0; i < p.asmCode.length; i++) {

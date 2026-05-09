@@ -5,7 +5,7 @@ import { BASE_PC_ARM } from '../types'
 import { applyUpdate } from '../simulator'
 import type { ParseResult } from './parser'
 import { interpretInstruction } from './interpreter'
-import type { Locale } from './interpreter'
+import type { Locale } from '../types'
 
 export interface TraceResult {
   states: MachineState[]

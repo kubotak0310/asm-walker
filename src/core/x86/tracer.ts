@@ -1,10 +1,27 @@
 // x86-64 program tracer: dynamically executes parsed instructions and collects state snapshots
 
-import type { MachineState, StepData, AsmLine } from '../types'
+import type { MachineState, StepData, AsmLine, Locale } from '../types'
 import { BASE_PC_X86 } from '../types'
 import { applyUpdate } from '../simulator'
 import type { X86ParseResult } from './parser'
 import { interpretX86 } from './interpreter'
+
+const TRACE_ERRORS: Record<Locale, {
+  noInstructions: string
+  lineError: (n: number, msg: string) => string
+  maxSteps: (n: number) => string
+}> = {
+  ja: {
+    noInstructions: '実行可能な命令がありません',
+    lineError: (n, msg) => `行${n}: ${msg}`,
+    maxSteps: (n) => `最大ステップ数 (${n}) を超えました。無限ループの可能性があります。`,
+  },
+  en: {
+    noInstructions: 'No executable instructions found',
+    lineError: (n, msg) => `Line ${n}: ${msg}`,
+    maxSteps: (n) => `Maximum steps (${n}) exceeded. Possible infinite loop.`,
+  },
+}
 
 export interface TraceResult {
   states: MachineState[]
@@ -33,6 +50,7 @@ export function traceX86(
   initialState: MachineState,
   maxSteps = 200,
   cLineMap?: Map<number, number>,
+  locale: Locale = 'ja',
 ): TraceResult {
   const { instructions, labels, sourceLines } = parseResult
   const instrCount = instructions.length
@@ -48,8 +66,10 @@ export function traceX86(
     }
   })
 
+  const ERR = TRACE_ERRORS[locale]
+
   if (instrCount === 0) {
-    return { states: [initialState], steps: [], asmLines, error: '実行可能な命令がありません' }
+    return { states: [initialState], steps: [], asmLines, error: ERR.noInstructions }
   }
 
   // Start from 'main' label if defined, otherwise from the first instruction
@@ -80,10 +100,11 @@ export function traceX86(
       labels,
       instrCount,
       callStack.length,
+      locale,
     )
 
     if ('error' in result) {
-      return { states, steps, asmLines, error: `行${instr.lineIndex + 1}: ${result.error}` }
+      return { states, steps, asmLines, error: ERR.lineError(instr.lineIndex + 1, result.error) }
     }
 
     const { update, explain, effect, comment, phase, isArr, ptrReg, nextInstrIdx } = result
@@ -141,7 +162,7 @@ export function traceX86(
   if (stepCount >= maxSteps) {
     return {
       states, steps, asmLines,
-      error: `最大ステップ数 (${maxSteps}) を超えました。無限ループの可能性があります。`,
+      error: ERR.maxSteps(maxSteps),
     }
   }
 

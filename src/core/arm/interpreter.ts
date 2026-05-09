@@ -1,6 +1,6 @@
 // ARM instruction interpreter: ParsedInstruction + MachineState → StateUpdate + metadata
 
-import type { MachineState, StateUpdate, Phase, StackFrame, StackMeta, Flags } from '../types'
+import type { MachineState, StateUpdate, Phase, StackFrame, StackMeta, Flags, Locale } from '../types'
 import { BASE_PC_ARM, FRAME_COLORS_CYCLE } from '../types'
 import { hexU32 } from '../simulator'
 import { updateTopFrame } from '../utils'
@@ -16,8 +16,6 @@ export interface InterpretResult {
   ptrReg?: string
   nextInstrIdx: number
 }
-
-export type Locale = 'ja' | 'en'
 
 type ArmCommentDict = {
   compare(a: string, b: string, flags: string): string

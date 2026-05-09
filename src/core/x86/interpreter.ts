@@ -1,6 +1,6 @@
 // x86-64 instruction interpreter: X86Instruction + MachineState → InterpretResult
 
-import type { MachineState, StateUpdate, Phase, StackFrame, Flags } from '../types'
+import type { MachineState, StateUpdate, Phase, StackFrame, Flags, Locale } from '../types'
 import { BASE_PC_X86, VIRTUAL_INSTR_SIZE, FRAME_COLORS_CYCLE } from '../types'
 import { hexU32 } from '../simulator'
 import { updateTopFrame } from '../utils'
@@ -15,6 +15,176 @@ export interface X86InterpretResult {
   isArr?: boolean
   ptrReg?: string
   nextInstrIdx: number
+}
+
+// ── i18n dictionaries ─────────────────────────────────────────────────────────
+
+interface X86ExplainDict {
+  movToReg: (dst: string) => string
+  movToMem: string
+  movExtend: (dst: string) => string
+  lea: string
+  push: (src: string) => string
+  pop: string
+  add: string
+  sub: string
+  imul: string
+  idiv: string
+  cdq: string
+  cqo: string
+  bitwise: (mnemonic: string) => string
+  not: string
+  neg: string
+  shift: (mnemonic: string) => string
+  cmp: string
+  test: string
+  jmp: string
+  jmpIndirect: string
+  jcc: (mnemonic: string) => string
+  call: (funcName: string) => string
+  callIndirect: string
+  ret: (val: string) => string
+  leave: string
+  nop: string
+  setcc: (mnemonic: string) => string
+  xchg: string
+}
+
+interface X86CommentDict {
+  pushSave: (src: string) => string
+  popRestore: (reg: string) => string
+  signExtend: string
+  zeroExtend: string
+  cdqExtend: (isNeg: boolean) => string
+  cqoExtend: (isNeg: boolean) => string
+  jccTaken: (label: string) => string
+  jccNotTaken: string
+  callSave: (addr: string, func: string) => string
+  callIndirect: string
+  jmpIndirect: string
+}
+
+interface X86ErrorDict {
+  operandMissing: (mnemonic: string) => string
+  invalidOperand: (mnemonic: string) => string
+  zeroDivision: string
+  labelNotFound: (mnemonic: string, name: string) => string
+  labelOperandRequired: (mnemonic: string) => string
+  regOperandRequired: (mnemonic: string) => string
+  unknownMnemonic: (mnemonic: string) => string
+}
+
+const X86_EXPLAINS: Record<Locale, X86ExplainDict> = {
+  ja: {
+    movToReg: (dst) => `${dst} にデータを転送`,
+    movToMem: 'メモリにデータを書き込み',
+    movExtend: (dst) => `${dst} に符号拡張転送`,
+    lea: '実効アドレスをロード (LEA)',
+    push: (src) => `${src} をスタックにプッシュ`,
+    pop: 'スタックからポップ',
+    add: '加算 (ADD)',
+    sub: '減算 (SUB)',
+    imul: '符号付き乗算 (IMUL)',
+    idiv: '符号付き除算 (IDIV)',
+    cdq: 'eax を edx:eax に符号拡張 (CDQ)',
+    cqo: 'rax を rdx:rax に符号拡張 (CQO)',
+    bitwise: (m) => `${m} 演算`,
+    not: 'ビット反転 (NOT)',
+    neg: '符号反転 (NEG)',
+    shift: (m) => `シフト (${m})`,
+    cmp: '比較してフラグ更新 (CMP)',
+    test: 'ANDしてフラグ更新 (TEST)',
+    jmp: '無条件ジャンプ',
+    jmpIndirect: '間接ジャンプ',
+    jcc: (m) => `条件分岐 (${m})`,
+    call: (f) => `関数呼び出し (CALL ${f})`,
+    callIndirect: '間接関数呼び出し',
+    ret: (v) => `関数から返る — rax = ${v}`,
+    leave: 'スタックフレームを解放 (LEAVE)',
+    nop: '何もしない (NOP)',
+    setcc: (m) => `条件セット (${m})`,
+    xchg: 'レジスタ交換 (XCHG)',
+  },
+  en: {
+    movToReg: (dst) => `Transfer data to ${dst}`,
+    movToMem: 'Write data to memory',
+    movExtend: (dst) => `Sign-extend transfer to ${dst}`,
+    lea: 'Load effective address (LEA)',
+    push: (src) => `Push ${src} onto stack`,
+    pop: 'Pop from stack',
+    add: 'Add (ADD)',
+    sub: 'Subtract (SUB)',
+    imul: 'Signed multiply (IMUL)',
+    idiv: 'Signed divide (IDIV)',
+    cdq: 'Sign-extend eax into edx:eax (CDQ)',
+    cqo: 'Sign-extend rax into rdx:rax (CQO)',
+    bitwise: (m) => `${m} operation`,
+    not: 'Bitwise NOT',
+    neg: 'Negate (NEG)',
+    shift: (m) => `Shift (${m})`,
+    cmp: 'Compare and update flags (CMP)',
+    test: 'AND and update flags (TEST)',
+    jmp: 'Unconditional jump',
+    jmpIndirect: 'Indirect jump',
+    jcc: (m) => `Conditional branch (${m})`,
+    call: (f) => `Function call (CALL ${f})`,
+    callIndirect: 'Indirect function call',
+    ret: (v) => `Return from function — rax = ${v}`,
+    leave: 'Destroy stack frame (LEAVE)',
+    nop: 'Do nothing (NOP)',
+    setcc: (m) => `Conditional set (${m})`,
+    xchg: 'Exchange registers (XCHG)',
+  },
+}
+
+const X86_COMMENTS: Record<Locale, X86CommentDict> = {
+  ja: {
+    pushSave: (src) => `${src} をスタックに保存`,
+    popRestore: (reg) => `スタックから ${reg} を復元`,
+    signExtend: '符号拡張',
+    zeroExtend: 'ゼロ拡張',
+    cdqExtend: (neg) => `rdx ← ${neg ? '0xffffffff (eax符号拡張)' : '0'}`,
+    cqoExtend: (neg) => `rdx ← ${neg ? '0xffffffff (rax符号拡張)' : '0'}`,
+    jccTaken: (label) => `成立 → ${label}`,
+    jccNotTaken: '不成立、スキップ',
+    callSave: (addr, func) => `戻り先(${addr})をスタックに積んで ${func} をコール`,
+    callIndirect: 'CALL (間接呼び出し)',
+    jmpIndirect: 'JMP (間接)',
+  },
+  en: {
+    pushSave: (src) => `Save ${src} onto stack`,
+    popRestore: (reg) => `Restore ${reg} from stack`,
+    signExtend: 'sign-extend',
+    zeroExtend: 'zero-extend',
+    cdqExtend: (neg) => `rdx ← ${neg ? '0xffffffff (eax sign-extend)' : '0'}`,
+    cqoExtend: (neg) => `rdx ← ${neg ? '0xffffffff (rax sign-extend)' : '0'}`,
+    jccTaken: (label) => `taken → ${label}`,
+    jccNotTaken: 'not taken, skip',
+    callSave: (addr, func) => `Push return addr(${addr}) and call ${func}`,
+    callIndirect: 'CALL (indirect)',
+    jmpIndirect: 'JMP (indirect)',
+  },
+}
+
+const X86_ERRORS: Record<Locale, X86ErrorDict> = {
+  ja: {
+    operandMissing: (m) => `${m}: operand不足`,
+    invalidOperand: (m) => `${m}: 不正なオペランド`,
+    zeroDivision: 'IDIV: ゼロ除算',
+    labelNotFound: (m, name) => `${m}: ラベル "${name}" が見つかりません`,
+    labelOperandRequired: (m) => `${m}: label operand必要`,
+    regOperandRequired: (m) => `${m}: reg operand必要`,
+    unknownMnemonic: (m) => `未実装の命令: ${m}`,
+  },
+  en: {
+    operandMissing: (m) => `${m}: missing operand`,
+    invalidOperand: (m) => `${m}: invalid operand`,
+    zeroDivision: 'IDIV: division by zero',
+    labelNotFound: (m, name) => `${m}: label "${name}" not found`,
+    labelOperandRequired: (m) => `${m}: label operand required`,
+    regOperandRequired: (m) => `${m}: register operand required`,
+    unknownMnemonic: (m) => `unimplemented instruction: ${m}`,
+  },
 }
 
 // フレームポインタ・スタックポインタを base に使う [] はポインタ参照ではなくローカル変数アクセス
@@ -212,6 +382,7 @@ interface InterpCtx {
   instrCount: number
   callDepth: number
   labels: Map<string, number>
+  locale: Locale
 }
 
 /**
@@ -245,8 +416,12 @@ function handleMovGroup(
   mnemonic: string, op0: X86Operand | undefined, op1: X86Operand | undefined,
   state: MachineState, ctx: InterpCtx,
 ): X86InterpretResult | { error: string } | null {
+  const E = X86_EXPLAINS[ctx.locale]
+  const C = X86_COMMENTS[ctx.locale]
+  const ERR = X86_ERRORS[ctx.locale]
+
   if (mnemonic === 'MOV') {
-    if (!op0 || !op1) return { error: 'MOV: operand不足' }
+    if (!op0 || !op1) return { error: ERR.operandMissing('MOV') }
     const val = resolveOperandValue(op1, state)
     const valStr = fmtDec(val)
     if (op0.type === 'reg') {
@@ -256,7 +431,7 @@ function handleMovGroup(
         : String(val)
       const comment = `${op0.name} ← ${src}`
       const ptrReg = op1.type === 'mem' && op1.base && !FRAME_REGS_X86.has(op1.base) ? op1.base : undefined
-      return makeResult(ctx, regUpdate(op0.name, val), `${op0.name} にデータを転送`, comment, comment,
+      return makeResult(ctx, regUpdate(op0.name, val), E.movToReg(op0.name), comment, comment,
         ctx.nextDefault, { ptrReg })
     }
     if (op0.type === 'mem') {
@@ -267,14 +442,14 @@ function handleMovGroup(
       const ptrReg = op0.base && !FRAME_REGS_X86.has(op0.base) ? op0.base : undefined
       return makeResult(ctx,
         { stackSet: { [addr]: val >>> 0 } },
-        `メモリにデータを書き込み`, comment, comment, ctx.nextDefault, { ptrReg },
+        E.movToMem, comment, comment, ctx.nextDefault, { ptrReg },
       )
     }
-    return { error: `MOV: 不正なオペランド` }
+    return { error: ERR.invalidOperand('MOV') }
   }
 
   if (mnemonic === 'MOVSX' || mnemonic === 'MOVZX') {
-    if (!op0 || !op1 || op0.type !== 'reg') return { error: `${mnemonic}: operand不足` }
+    if (!op0 || !op1 || op0.type !== 'reg') return { error: ERR.operandMissing(mnemonic) }
     const raw = resolveOperandValue(op1, state)
     const size = op1.type === 'mem' ? op1.size : 4
     let val: number
@@ -285,15 +460,16 @@ function handleMovGroup(
       const mask = size === 1 ? 0xff : size === 2 ? 0xffff : 0xffffffff
       val = raw & mask
     }
-    const comment = `${op0.name} ← ${mnemonic === 'MOVSX' ? '符号拡張' : 'ゼロ拡張'}(${fmtDec(raw)}) = ${fmtDec(val)}`
-    return makeResult(ctx, regUpdate(op0.name, val), `${op0.name} に符号拡張転送`, comment, comment)
+    const kind = mnemonic === 'MOVSX' ? C.signExtend : C.zeroExtend
+    const comment = `${op0.name} ← ${kind}(${fmtDec(raw)}) = ${fmtDec(val)}`
+    return makeResult(ctx, regUpdate(op0.name, val), E.movExtend(op0.name), comment, comment)
   }
 
   if (mnemonic === 'LEA') {
-    if (!op0 || !op1 || op0.type !== 'reg' || op1.type !== 'mem') return { error: 'LEA: operand不足' }
+    if (!op0 || !op1 || op0.type !== 'reg' || op1.type !== 'mem') return { error: ERR.operandMissing('LEA') }
     const addr = getMemAddr(op1, state)
     const comment = `${op0.name} ← ${hexU32(addr)}`
-    return makeResult(ctx, regUpdate(op0.name, addr), `実効アドレスをロード (LEA)`, comment, comment)
+    return makeResult(ctx, regUpdate(op0.name, addr), E.lea, comment, comment)
   }
 
   return null
@@ -306,28 +482,32 @@ function handleStackX86(
   mnemonic: string, op0: X86Operand | undefined,
   state: MachineState, ctx: InterpCtx,
 ): X86InterpretResult | { error: string } | null {
+  const E = X86_EXPLAINS[ctx.locale]
+  const C = X86_COMMENTS[ctx.locale]
+  const ERR = X86_ERRORS[ctx.locale]
+
   if (mnemonic === 'PUSH') {
-    if (!op0) return { error: 'PUSH: operand不足' }
+    if (!op0) return { error: ERR.operandMissing('PUSH') }
     const val = resolveOperandValue(op0, state)
     const newSp = (state.sp - 8) >>> 0
     const src = op0.type === 'reg' ? fmtRV(op0.name, val) : fmtDec(val)
     const effect = `rsp ← ${hexU32(newSp)}; [rsp] ← ${src}`
-    const comment = `${src} をスタックに保存`
+    const comment = C.pushSave(src)
     return makeResult(ctx,
       { sp: newSp, stackSet: { [newSp]: val >>> 0 }, frames: updateTopFrame(newSp, state) },
-      `${src} をスタックにプッシュ`, effect, comment, ctx.nextDefault,
+      E.push(src), effect, comment, ctx.nextDefault,
     )
   }
 
   if (mnemonic === 'POP') {
-    if (!op0 || op0.type !== 'reg') return { error: 'POP: operand不足' }
+    if (!op0 || op0.type !== 'reg') return { error: ERR.operandMissing('POP') }
     const val = readMem(state.sp, state)
     const newSp = (state.sp + 8) >>> 0
     const effect = `${op0.name} ← [rsp]=${hexU32(state.sp)}(${fmtDec(val)}); rsp ← ${hexU32(newSp)}`
-    const comment = `スタックから ${fmtRV(op0.name, val)} を復元`
+    const comment = C.popRestore(fmtRV(op0.name, val))
     return makeResult(ctx,
       { ...regUpdate(op0.name, val), sp: newSp, stackRemove: [state.sp], frames: updateTopFrame(newSp, state) },
-      `スタックからポップ`, effect, comment,
+      E.pop, effect, comment,
     )
   }
 
@@ -342,8 +522,12 @@ function handleArithX86(
   op0: X86Operand | undefined, op1: X86Operand | undefined, op2: X86Operand | undefined,
   state: MachineState, ctx: InterpCtx,
 ): X86InterpretResult | { error: string } | null {
+  const E = X86_EXPLAINS[ctx.locale]
+  const C = X86_COMMENTS[ctx.locale]
+  const ERR = X86_ERRORS[ctx.locale]
+
   if (mnemonic === 'ADD') {
-    if (!op0 || !op1) return { error: 'ADD: operand不足' }
+    if (!op0 || !op1) return { error: ERR.operandMissing('ADD') }
     const a = resolveOperandValue(op0, state)
     const b = resolveOperandValue(op1, state)
     const result = (a + b) | 0
@@ -352,19 +536,19 @@ function handleArithX86(
     if (op0.type === 'reg') {
       const comment = `${op0.name} ← ${fmtRV(op0.name, a)} + ${bStr} = ${fmtDec(result)}`
       const extra = op0.name === 'rsp' ? { frames: updateTopFrame(result >>> 0, state) } : {}
-      return makeResult(ctx, { ...regUpdate(op0.name, result), flags, ...extra }, `加算 (ADD)`, comment, comment)
+      return makeResult(ctx, { ...regUpdate(op0.name, result), flags, ...extra }, E.add, comment, comment)
     }
     if (op0.type === 'mem') {
       const addr = getMemAddr(op0, state)
       const memStr = fmtMA(op0.base, op0.index, op0.scale, op0.disp, state)
       const comment = `${memStr} ← ${fmtDec(a)} + ${bStr} = ${fmtDec(result)}`
-      return makeResult(ctx, { stackSet: { [addr]: result >>> 0 }, flags }, `加算 (ADD)`, comment, comment)
+      return makeResult(ctx, { stackSet: { [addr]: result >>> 0 }, flags }, E.add, comment, comment)
     }
-    return { error: 'ADD: 不正なオペランド' }
+    return { error: ERR.invalidOperand('ADD') }
   }
 
   if (mnemonic === 'SUB') {
-    if (!op0 || !op1) return { error: 'SUB: operand不足' }
+    if (!op0 || !op1) return { error: ERR.operandMissing('SUB') }
     const a = resolveOperandValue(op0, state)
     const b = resolveOperandValue(op1, state)
     const result = (a - b) | 0
@@ -373,19 +557,19 @@ function handleArithX86(
     if (op0.type === 'reg') {
       const comment = `${op0.name} ← ${fmtRV(op0.name, a)} - ${bStr} = ${fmtDec(result)}`
       const extra = op0.name === 'rsp' ? { frames: updateTopFrame(result >>> 0, state) } : {}
-      return makeResult(ctx, { ...regUpdate(op0.name, result), flags, ...extra }, `減算 (SUB)`, comment, comment)
+      return makeResult(ctx, { ...regUpdate(op0.name, result), flags, ...extra }, E.sub, comment, comment)
     }
     if (op0.type === 'mem') {
       const addr = getMemAddr(op0, state)
       const memStr = fmtMA(op0.base, op0.index, op0.scale, op0.disp, state)
       const comment = `${memStr} ← ${fmtDec(a)} - ${bStr} = ${fmtDec(result)}`
-      return makeResult(ctx, { stackSet: { [addr]: result >>> 0 }, flags }, `減算 (SUB)`, comment, comment)
+      return makeResult(ctx, { stackSet: { [addr]: result >>> 0 }, flags }, E.sub, comment, comment)
     }
-    return { error: 'SUB: 不正なオペランド' }
+    return { error: ERR.invalidOperand('SUB') }
   }
 
   if (mnemonic === 'IMUL') {
-    if (!op0) return { error: 'IMUL: operand不足' }
+    if (!op0) return { error: ERR.operandMissing('IMUL') }
     if (op0.type !== 'reg') return { error: 'IMUL: dest must be register' }
     let a: number, b: number, dest: string
     if (!op1) {
@@ -399,19 +583,19 @@ function handleArithX86(
     const aStr = op2 ? (op1?.type === 'reg' ? fmtRV(op1.name, a) : fmtDec(a)) : fmtRV(dest, a)
     const bStr = op1?.type === 'reg' ? fmtRV(op1.name, b) : fmtDec(b)
     const comment = `${dest} ← ${aStr} × ${bStr} = ${fmtDec(result)}`
-    return makeResult(ctx, regUpdate(dest, result), `符号付き乗算 (IMUL)`, comment, comment)
+    return makeResult(ctx, regUpdate(dest, result), E.imul, comment, comment)
   }
 
   if (mnemonic === 'IDIV') {
-    if (!op0) return { error: 'IDIV: operand不足' }
+    if (!op0) return { error: ERR.operandMissing('IDIV') }
     const divisor = resolveOperandValue(op0, state) | 0
-    if (divisor === 0) return { error: 'IDIV: ゼロ除算' }
+    if (divisor === 0) return { error: ERR.zeroDivision }
     const rax = getRegVal('rax', state) | 0
     const quot = Math.trunc(rax / divisor)
     const rem = rax % divisor
     const divStr = op0.type === 'reg' ? fmtRV(op0.name, divisor) : fmtDec(divisor)
     const comment = `rax ← ${fmtRV('rax', rax)} / ${divStr} = ${quot}; rdx ← ${rem}`
-    return makeResult(ctx, { regs: { rax: quot >>> 0, rdx: rem >>> 0 } }, `符号付き除算 (IDIV)`, comment, comment)
+    return makeResult(ctx, { regs: { rax: quot >>> 0, rdx: rem >>> 0 } }, E.idiv, comment, comment)
   }
 
   // IDIV は rdx:rax を被除数とする 64 bit 除算を行う。
@@ -419,14 +603,14 @@ function handleArithX86(
   if (mnemonic === 'CDQ') {
     const rax = getRegVal('rax', state) | 0
     const rdx = rax < 0 ? 0xffffffff : 0
-    const comment = `rdx ← ${rax < 0 ? '0xffffffff (eax符号拡張)' : '0'}`
-    return makeResult(ctx, { regs: { rdx } }, `eax を edx:eax に符号拡張 (CDQ)`, comment, comment)
+    const comment = C.cdqExtend(rax < 0)
+    return makeResult(ctx, { regs: { rdx } }, E.cdq, comment, comment)
   }
   if (mnemonic === 'CQO') {
     const rax = getRegVal('rax', state) | 0
     const rdx = rax < 0 ? 0xffffffff : 0
-    const comment = `rdx ← ${rax < 0 ? '0xffffffff (rax符号拡張)' : '0'}`
-    return makeResult(ctx, { regs: { rdx } }, `rax を rdx:rax に符号拡張 (CQO)`, comment, comment)
+    const comment = C.cqoExtend(rax < 0)
+    return makeResult(ctx, { regs: { rdx } }, E.cqo, comment, comment)
   }
 
   return null
@@ -439,8 +623,11 @@ function handleLogicX86(
   mnemonic: string, op0: X86Operand | undefined, op1: X86Operand | undefined,
   state: MachineState, ctx: InterpCtx,
 ): X86InterpretResult | { error: string } | null {
+  const E = X86_EXPLAINS[ctx.locale]
+  const ERR = X86_ERRORS[ctx.locale]
+
   if (mnemonic === 'AND' || mnemonic === 'OR' || mnemonic === 'XOR') {
-    if (!op0 || !op1) return { error: `${mnemonic}: operand不足` }
+    if (!op0 || !op1) return { error: ERR.operandMissing(mnemonic) }
     const a = resolveOperandValue(op0, state)
     const b = resolveOperandValue(op1, state)
     const result = mnemonic === 'AND' ? a & b : mnemonic === 'OR' ? a | b : a ^ b
@@ -450,25 +637,25 @@ function handleLogicX86(
     if (op0.type === 'reg') {
       const sym = mnemonic === 'AND' ? '&' : mnemonic === 'OR' ? '|' : '^'
       const comment = `${op0.name} ← ${fmtRV(op0.name, a)} ${sym} ${bStr} = ${fmtDec(result)}`
-      return makeResult(ctx, { ...regUpdate(op0.name, result), flags }, `${mnemonic} 演算`, comment, comment)
+      return makeResult(ctx, { ...regUpdate(op0.name, result), flags }, E.bitwise(mnemonic), comment, comment)
     }
-    return { error: `${mnemonic}: 不正なオペランド` }
+    return { error: ERR.invalidOperand(mnemonic) }
   }
 
   if (mnemonic === 'NOT') {
-    if (!op0 || op0.type !== 'reg') return { error: 'NOT: operand不足' }
+    if (!op0 || op0.type !== 'reg') return { error: ERR.operandMissing('NOT') }
     const a = resolveOperandValue(op0, state)
     const result = ~a >>> 0
     const comment = `${op0.name} ← ~${fmtRV(op0.name, a)} = ${fmtDec(result)}`
-    return makeResult(ctx, regUpdate(op0.name, result), `ビット反転 (NOT)`, comment, comment)
+    return makeResult(ctx, regUpdate(op0.name, result), E.not, comment, comment)
   }
 
   if (mnemonic === 'NEG') {
-    if (!op0 || op0.type !== 'reg') return { error: 'NEG: operand不足' }
+    if (!op0 || op0.type !== 'reg') return { error: ERR.operandMissing('NEG') }
     const a = resolveOperandValue(op0, state) | 0
     const result = (-a) | 0
     const comment = `${op0.name} ← -${fmtRV(op0.name, a)} = ${fmtDec(result)}`
-    return makeResult(ctx, regUpdate(op0.name, result), `符号反転 (NEG)`, comment, comment)
+    return makeResult(ctx, regUpdate(op0.name, result), E.neg, comment, comment)
   }
 
   return null
@@ -481,8 +668,11 @@ function handleShiftX86(
   mnemonic: string, op0: X86Operand | undefined, op1: X86Operand | undefined,
   state: MachineState, ctx: InterpCtx,
 ): X86InterpretResult | { error: string } | null {
+  const E = X86_EXPLAINS[ctx.locale]
+  const ERR = X86_ERRORS[ctx.locale]
+
   if (mnemonic !== 'SHL' && mnemonic !== 'SHR' && mnemonic !== 'SAR') return null
-  if (!op0 || !op1 || op0.type !== 'reg') return { error: `${mnemonic}: operand不足` }
+  if (!op0 || !op1 || op0.type !== 'reg') return { error: ERR.operandMissing(mnemonic) }
   const a = resolveOperandValue(op0, state)
   const shift = resolveOperandValue(op1, state) & 0x3f
   let result: number
@@ -491,7 +681,7 @@ function handleShiftX86(
   else result = (a >> shift) | 0
   const sym = mnemonic === 'SHL' ? '<<' : mnemonic === 'SHR' ? '>>>' : '>>'
   const comment = `${op0.name} ← ${fmtRV(op0.name, a)} ${sym} ${shift} = ${fmtDec(result)}`
-  return makeResult(ctx, regUpdate(op0.name, result), `シフト (${mnemonic})`, comment, comment)
+  return makeResult(ctx, regUpdate(op0.name, result), E.shift(mnemonic), comment, comment)
 }
 
 /**
@@ -501,8 +691,11 @@ function handleCmpX86(
   mnemonic: string, op0: X86Operand | undefined, op1: X86Operand | undefined,
   state: MachineState, ctx: InterpCtx,
 ): X86InterpretResult | { error: string } | null {
+  const E = X86_EXPLAINS[ctx.locale]
+  const ERR = X86_ERRORS[ctx.locale]
+
   if (mnemonic === 'CMP') {
-    if (!op0 || !op1) return { error: 'CMP: operand不足' }
+    if (!op0 || !op1) return { error: ERR.operandMissing('CMP') }
     const a = resolveOperandValue(op0, state)
     const b = resolveOperandValue(op1, state)
     const result = (a - b) | 0
@@ -511,11 +704,11 @@ function handleCmpX86(
     const bStr = op1.type === 'reg' ? fmtRV(op1.name, b) : fmtDec(b)
     const flagStr = `Z=${flags.zero ? 1 : 0} N=${flags.negative ? 1 : 0} C=${flags.carry ? 1 : 0} V=${flags.overflow ? 1 : 0}`
     const comment = `${aStr} - ${bStr} → ${flagStr}`
-    return makeResult(ctx, { flags }, `比較してフラグ更新 (CMP)`, flagStr, comment)
+    return makeResult(ctx, { flags }, E.cmp, flagStr, comment)
   }
 
   if (mnemonic === 'TEST') {
-    if (!op0 || !op1) return { error: 'TEST: operand不足' }
+    if (!op0 || !op1) return { error: ERR.operandMissing('TEST') }
     const a = resolveOperandValue(op0, state)
     const b = resolveOperandValue(op1, state)
     const result = a & b
@@ -524,7 +717,7 @@ function handleCmpX86(
     const bStr = op1.type === 'reg' ? fmtRV(op1.name, b) : fmtDec(b)
     const flagStr = `Z=${flags.zero ? 1 : 0} N=${flags.negative ? 1 : 0} C=${flags.carry ? 1 : 0} V=${flags.overflow ? 1 : 0}`
     const comment = `${aStr} & ${bStr} → ${flagStr}`
-    return makeResult(ctx, { flags }, `ANDしてフラグ更新 (TEST)`, flagStr, comment)
+    return makeResult(ctx, { flags }, E.test, flagStr, comment)
   }
 
   return null
@@ -537,55 +730,58 @@ function handleBranchX86(
   mnemonic: string, op0: X86Operand | undefined,
   state: MachineState, ctx: InterpCtx,
 ): X86InterpretResult | { error: string } | null {
+  const E = X86_EXPLAINS[ctx.locale]
+  const C = X86_COMMENTS[ctx.locale]
+  const ERR = X86_ERRORS[ctx.locale]
+
   if (mnemonic === 'JMP') {
-    if (!op0) return { error: 'JMP: operand不足' }
+    if (!op0) return { error: ERR.operandMissing('JMP') }
     if (op0.type === 'label') {
       const target = ctx.labels.get(op0.name)
-      if (target === undefined) return { error: `JMP: ラベル "${op0.name}" が見つかりません` }
+      if (target === undefined) return { error: ERR.labelNotFound('JMP', op0.name) }
       const comment = `RIP ← ${op0.name}`
-      return makeResult(ctx, {}, `無条件ジャンプ`, comment, comment, target)
+      return makeResult(ctx, {}, E.jmp, comment, comment, target)
     }
     // indirect jmp (reg/mem) — treat as end of trace
-    return makeResult(ctx, {}, `間接ジャンプ`, 'JMP (間接)', 'JMP (間接)', ctx.instrCount)
+    return makeResult(ctx, {}, E.jmpIndirect, C.jmpIndirect, C.jmpIndirect, ctx.instrCount)
   }
 
   if (mnemonic.startsWith('J') && mnemonic !== 'JMP') {
-    if (!op0 || op0.type !== 'label') return { error: `${mnemonic}: label operand必要` }
+    if (!op0 || op0.type !== 'label') return { error: ERR.labelOperandRequired(mnemonic) }
     const condSuffix = mnemonic.slice('J'.length)
     const taken = evalCond(condSuffix, state.flags)
     const target = ctx.labels.get(op0.name)
-    if (target === undefined) return { error: `${mnemonic}: ラベル "${op0.name}" が見つかりません` }
+    if (target === undefined) return { error: ERR.labelNotFound(mnemonic, op0.name) }
     const nextIdx = taken ? target : ctx.nextDefault
-    const takenStr = taken ? `成立 → ${op0.name}` : `不成立、スキップ`
+    const takenStr = taken ? C.jccTaken(op0.name) : C.jccNotTaken
     const comment = `${mnemonic} ${takenStr}`
-    return makeResult(ctx, {}, `条件分岐 (${mnemonic})`, comment, comment, nextIdx)
+    return makeResult(ctx, {}, E.jcc(mnemonic), comment, comment, nextIdx)
   }
 
   if (mnemonic === 'CALL') {
-    if (!op0) return { error: 'CALL: operand不足' }
+    if (!op0) return { error: ERR.operandMissing('CALL') }
     if (op0.type === 'label') {
       const target = ctx.labels.get(op0.name)
-      if (target === undefined) return { error: `CALL: ラベル "${op0.name}" が見つかりません` }
+      if (target === undefined) return { error: ERR.labelNotFound('CALL', op0.name) }
       // x86 ABI: CALL は戻りアドレス（= 次の命令の PC）をスタックに積んでからジャンプする。
       // ARM の BL と違いハードウェアレジスタ（LR）は使わない。RET で [rsp] から戻る。
       const retAddr = ctx.nextPc
       const newSp = (state.sp - 8) >>> 0
       const effect = `rsp ← ${hexU32(newSp)}; [rsp] ← ${hexU32(retAddr)}, RIP ← ${op0.name}`
-      const comment = `戻り先(${hexU32(retAddr)})をスタックに積んで ${op0.name.split('(')[0]} をコール`
-      const color = FRAME_COLORS_CYCLE[Math.min(ctx.callDepth + 1, 2)] ?? 'green'
-      // Compiler Explorer は "add(int, int)" 形式でラベルを出力するため、括弧以降を除去する
       const funcName = op0.name.split('(')[0]?.toLowerCase() ?? op0.name.toLowerCase()
+      const comment = C.callSave(hexU32(retAddr), funcName)
+      const color = FRAME_COLORS_CYCLE[Math.min(ctx.callDepth + 1, 2)] ?? 'green'
       const newFrames: StackFrame[] = [
         ...state.frames,
         { name: funcName, lo: newSp, hi: newSp, color },
       ]
       return makeResult(ctx,
         { sp: newSp, stackSet: { [newSp]: retAddr }, frames: newFrames },
-        `関数呼び出し (CALL ${funcName})`, effect, comment, target,
+        E.call(funcName), effect, comment, target,
       )
     }
-    const comment = `CALL (間接呼び出し)`
-    return makeResult(ctx, {}, `間接関数呼び出し`, comment, comment)
+    const comment = C.callIndirect
+    return makeResult(ctx, {}, E.callIndirect, comment, comment)
   }
 
   if (mnemonic === 'RET') {
@@ -596,7 +792,7 @@ function handleBranchX86(
     const poppedFrames = state.frames.slice(0, -1)
     return makeResult(ctx,
       { sp: newSp, stackRemove: [state.sp], frames: poppedFrames },
-      `関数から返る — rax = ${fmtDec(rax)}`, comment, comment,
+      E.ret(fmtDec(rax)), comment, comment,
       // sentinel: tracer will use retAddr from stack
       ctx.instrCount,
     )
@@ -610,7 +806,7 @@ function handleBranchX86(
     const comment = `rsp ← rbp(${hexU32(state.fp)}); rbp ← [rsp](${fmtDec(rbpVal)}); rsp ← ${hexU32(finalSp)}`
     return makeResult(ctx,
       { sp: finalSp, fp: rbpVal, stackRemove: [newSp] },
-      `スタックフレームを解放 (LEAVE)`, comment, comment,
+      E.leave, comment, comment,
     )
   }
 
@@ -624,20 +820,23 @@ function handleMiscX86(
   mnemonic: string, op0: X86Operand | undefined, op1: X86Operand | undefined,
   state: MachineState, ctx: InterpCtx,
 ): X86InterpretResult | { error: string } | null {
+  const E = X86_EXPLAINS[ctx.locale]
+  const ERR = X86_ERRORS[ctx.locale]
+
   if (mnemonic === 'NOP') {
-    return makeResult(ctx, {}, `何もしない (NOP)`, 'NOP', 'NOP')
+    return makeResult(ctx, {}, E.nop, 'NOP', 'NOP')
   }
 
   if (mnemonic.startsWith('SET')) {
     const condSuffix = mnemonic.slice('SET'.length)
     const val = evalCond(condSuffix, state.flags) ? 1 : 0
-    if (!op0 || op0.type !== 'reg') return { error: `${mnemonic}: reg operand必要` }
+    if (!op0 || op0.type !== 'reg') return { error: ERR.regOperandRequired(mnemonic) }
     const comment = `${op0.name} ← ${val} (${mnemonic})`
-    return makeResult(ctx, regUpdate(op0.name, val), `条件セット (${mnemonic})`, comment, comment)
+    return makeResult(ctx, regUpdate(op0.name, val), E.setcc(mnemonic), comment, comment)
   }
 
   if (mnemonic === 'XCHG') {
-    if (!op0 || !op1) return { error: 'XCHG: operand不足' }
+    if (!op0 || !op1) return { error: ERR.operandMissing('XCHG') }
     const a = resolveOperandValue(op0, state)
     const b = resolveOperandValue(op1, state)
     const updates: StateUpdate = {}
@@ -647,7 +846,7 @@ function handleMiscX86(
       Object.assign(updates, { regs: { ...(updates.regs ?? {}), ...(u.regs ?? {}) } })
     }
     const comment = `${op0.type === 'reg' ? op0.name : 'mem'} ↔ ${op1.type === 'reg' ? op1.name : 'mem'}`
-    return makeResult(ctx, updates, `レジスタ交換 (XCHG)`, comment, comment)
+    return makeResult(ctx, updates, E.xchg, comment, comment)
   }
 
   return null
@@ -666,6 +865,7 @@ function handleMiscX86(
  * @param labels - ラベル名 → 命令インデックスのマップ（ジャンプ先解決に使用）
  * @param instrCount - 命令配列の総数（番兵値として使用）
  * @param callDepth - 現在のコールネスト深さ（0 = main 相当）
+ * @param locale - 表示言語（'ja' または 'en'）
  * @returns 正常時は X86InterpretResult、未対応命令時は { error: string }
  */
 export function interpretX86(
@@ -675,13 +875,14 @@ export function interpretX86(
   labels: Map<string, number>,
   instrCount: number,
   callDepth: number,
+  locale: Locale = 'ja',
 ): X86InterpretResult | { error: string } {
   const { mnemonic, operands } = instr
   const nextDefault = instrIdx + 1
   const nextPc = BASE_PC + nextDefault * INSTR_SIZE
   const phase: Phase = callDepth === 0 ? 'main' : 'callee'
 
-  const ctx: InterpCtx = { nextDefault, nextPc, phase, instrCount, callDepth, labels }
+  const ctx: InterpCtx = { nextDefault, nextPc, phase, instrCount, callDepth, labels, locale }
   const op0 = operands[0]
   const op1 = operands[1]
   const op2 = operands[2]
@@ -695,6 +896,6 @@ export function interpretX86(
     handleCmpX86(mnemonic, op0, op1, state, ctx) ??
     handleBranchX86(mnemonic, op0, state, ctx) ??
     handleMiscX86(mnemonic, op0, op1, state, ctx) ??
-    { error: `未実装の命令: ${mnemonic}` }
+    { error: X86_ERRORS[locale].unknownMnemonic(mnemonic) }
   )
 }

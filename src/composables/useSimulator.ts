@@ -410,13 +410,14 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
     arch.value = isArm ? 'arm' : 'x86'
     const cSourceLines = cSource.split('\n')
 
+    const locale = i18n.global.locale.value === 'ja' ? 'ja' : 'en'
+
     if (isArm) {
       const parseResult = parseARM(output.asmText)
       if (parseResult.errors.length > 0) {
         compileError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
         return
       }
-      const locale = i18n.global.locale.value === 'ja' ? 'ja' : 'en'
       const result = traceProgram(parseResult, INITIAL_STATE, MAX_TRACE_STEPS, output.cLineMap, locale)
       compileError.value = result.error ?? null
       states.value = result.states
@@ -435,7 +436,7 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         compileError.value = parseResult.errors.map(e => `行${e.line + 1}: ${e.message}`).join('\n')
         return
       }
-      const result = traceX86(parseResult, X86_INITIAL_STATE, MAX_TRACE_STEPS, output.cLineMap)
+      const result = traceX86(parseResult, X86_INITIAL_STATE, MAX_TRACE_STEPS, output.cLineMap, locale)
       compileError.value = result.error ?? null
       states.value = result.states
       preset.value = {

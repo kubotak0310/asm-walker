@@ -1,6 +1,7 @@
 // プロジェクト全体で共有する型定義と定数。アーキテクチャ非依存の共通データ構造を置く。
 
 export type Arch = 'x86' | 'arm'
+export type Locale = 'ja' | 'en'
 
 export interface Flags {
   zero: boolean
@@ -90,16 +91,6 @@ export const BASE_SP_ARM = 0x20008000 // ARM Cortex-M SRAM 末尾（スタック
 export const BASE_PC_X86 = 0x401000   // x86-64 ELF の典型的なコードセグメント先頭
 export const BASE_PC_ARM = 0x08000000 // ARM Cortex-M Flash メモリ先頭
 export const BASE_ROM_DATA = 0x08010000 // リテラルプール疑似 ROM 領域の先頭（スタックパネル表示対象外）
-
-// フェーズごとのテーマカラー（FrameViz・StackPanel の左ボーダー色と対応）
-export const PHASE_COLORS: Record<Phase, string> = {
-  main: 'purple',
-  caller: 'purple',
-  callee: 'green',
-  hw: 'orange',
-  isr: 'green',
-  ret: 'coral',
-}
 
 // 無限ループ対策のトレース上限ステップ数（ARM / x86 トレーサー共通）
 export const MAX_TRACE_STEPS = 500

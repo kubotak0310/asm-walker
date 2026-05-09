@@ -1,9 +1,10 @@
 ---
-title: "AI時代だからこそ、CPUの動きを知りたい。C→アセンブラ対応可視化ツールを作った"
-emoji: "⚙️"
-type: "idea"
-topics: ["assembly", "arm", "x86", "c言語", "低レイヤー"]
+title: 'AI時代だからこそ、CPUの動きを知りたい。アセンブラ可視化ツールを作った'
+emoji: '⚙️'
+type: 'idea'
+topics: ['assembly', 'arm', 'x86', 'c言語', '低レイヤー']
 published: true
+slug: '480e2ef8322e6c'
 ---
 
 ## アセンブラ、正直に言う。わかったふりをしていた。
@@ -70,7 +71,7 @@ AI はコードを書いてくれる。しかし、**なぜそのコードが動
 ### C コードをその場でコンパイルして、アセンブラをステップ実行
 
 エディタに C コードを書いて「コンパイル」を押すだけ。
-![コンパイル画面](./images/compile.png)
+![コンパイル画面](/images/compile.png)
 
 Godbolt Compiler Explorer の API 経由で、本物の GCC（ARM / x86-64）がコンパイルする。
 生成されたアセンブラを、1命令ずつ実行できる。
@@ -80,19 +81,19 @@ Godbolt Compiler Explorer の API 経由で、本物の GCC（ARM / x86-64）が
 「この `str r0, [r7, #4]` は C の何行目に対応してるの？」
 
 その答えが、一目でわかる。
-![C ソースとアセンブラの対応ハイライト](./images/highlight.png)
+![C ソースとアセンブラの対応ハイライト](/images/highlight.png)
 
 ### レジスタとスタックの変化をリアルタイムで確認できる
 
 命令を進めるたびに、レジスタの値が変わる。スタックにデータが積まれる。
-![レジスタパネル + スタックパネル](./images/registers.png)
+![レジスタパネル + スタックパネル](/images/registers.png)
 
 `sub sp, sp, #8` の意味がわからなかった人も、これを見れば一発で理解できる。
 
 ### 命令の日本語説明が出る
 
 知らない命令が出てきても、画面を離れなくていい。意味・フォーマット・実行結果がその場で確認できる。
-![命令説明パネル](./images/explain.png)
+![命令説明パネル](/images/explain.png)
 
 ### ARM / x86-64 の両方に対応
 
@@ -126,25 +127,25 @@ int main(void) {
 - `push {r7, lr}` でスタックに LR（戻り先アドレス）が積まれる様子
 - `pop {r7, pc}` で LR が PC に戻され、呼び出し元に返る瞬間
 
-![bl 命令のステップ、引数バッジ付きレジスタ](./images/bl-step.png)
+![bl 命令のステップ、引数バッジ付きレジスタ](/images/bl-step.png)
 
 ABI（呼び出し規約）の動きが、目の前で展開される。
 
 ### スタックフレームを可視化する
 
 関数が呼ばれるたびにフレームが積み上がり、`return` で戻るたびに消えていく。「スタックフレームとは何か」が、図を見た瞬間に腑に落ちる。
-![FrameViz](./images/frameviz.png)
+![FrameViz](/images/frameviz.png)
 
 ---
 
 ## 技術構成
 
-| レイヤー | 技術 |
-|---|---|
+| レイヤー       | 技術                              |
+| -------------- | --------------------------------- |
 | フロントエンド | Vue 3 + TypeScript + Tailwind CSS |
-| エディタ | CodeMirror 6 |
-| コンパイル | Godbolt Compiler Explorer API |
-| ホスティング | Vercel |
+| エディタ       | CodeMirror 6                      |
+| コンパイル     | Godbolt Compiler Explorer API     |
+| ホスティング   | Vercel                            |
 
 Godbolt API は CORS を許可しているため、バックエンド不要。ブラウザから直接コンパイルリクエストを送っている。
 

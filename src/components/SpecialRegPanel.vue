@@ -16,7 +16,13 @@
 
       <!-- Flags: RISC-V にはフラグレジスタが存在しないため非表示 -->
       <div v-if="arch !== 'rv32'" class="pt-1 border-t border-gray-700 mt-1">
-        <div class="text-gray-400 mb-1">{{ $t('specialRegPanel.flags') }}</div>
+        <div class="flex items-center justify-between text-gray-400 mb-1">
+          <span>{{ $t('specialRegPanel.flags') }}</span>
+          <a href="/guide/flags.html" target="_blank" rel="noopener"
+             class="flex items-center text-gray-500 hover:text-gray-200 transition-colors">
+            <span class="material-icons text-sm leading-none">menu_book</span>
+          </a>
+        </div>
         <div class="flex gap-2 flex-wrap">
           <FlagBit v-for="f in flags" :key="f.name" :name="f.name" :value="f.value" :changed="f.changed" />
         </div>

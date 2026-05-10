@@ -1,6 +1,6 @@
 export default {
   app: {
-    subtitle: 'ARM Cortex-M / x86-64 アセンブラ学習ツール',
+    subtitle: 'ARM Cortex-M / x86-64 / RISC-V アセンブラ学習ツール',
     guide: 'ガイド',
     guideItems: {
       machineCode: 'マシン語とアセンブラ',
@@ -15,8 +15,8 @@ export default {
     },
   },
   stepController: {
-    prev: '◀ 戻る',
-    next: '次のステップ ▶',
+    prev: '戻る',
+    next: '次のステップ',
     reset: 'リセット',
   },
   cCompilePanel: {

@@ -1,6 +1,12 @@
 <template>
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">{{ $t('registerPanel.header') }}</div>
+    <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold flex items-center justify-between">
+      <span>{{ $t('registerPanel.header') }}</span>
+      <a href="/guide/registers.html" target="_blank" rel="noopener"
+         class="flex items-center text-gray-400 hover:text-gray-200 transition-colors font-normal">
+        <span class="material-icons text-sm leading-none">menu_book</span>
+      </a>
+    </div>
     <div class="p-2 grid grid-cols-2 gap-y-1 gap-x-6 font-mono text-xs">
       <div
         v-for="reg in registers"

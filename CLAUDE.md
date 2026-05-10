@@ -103,19 +103,31 @@
 - `src/samples/index.ts`: `SampleDef.name` を `string` → `{ ja: string; en: string }` に変更
 - **注意**: ARM explain/comment はトレース時（コンパイル時）にベイクされる設計。ロケール切り替え後は再コンパイルが必要
 
+### ガイドページ・UI改善（2026-05-10）で完了した機能
+- `public/guide/registers.html` の用語を初学者向けに改訂:
+  - 「保存義務」列 → 「呼び出し後の値」、「Caller-saved」→「変わる可能性あり」、「Callee-saved」→「保持される」
+  - 引数・戻り値レジスタの用途を「汎用 / 第1引数 / 戻り値」形式に統一（「慣例」記述を削除）
+  - フレームポインタ行（r7/r11/rbp/s0）に「ABI必須ではなくGCCの実装」と明記
+- `SpecialRegPanel.vue`: RISC-V 時はフラグセクションを非表示（`v-if="arch !== 'rv32'"`)
+- `RegisterPanel.vue`: ヘッダー右端に `registers.html` へのリンクアイコン（`menu_book`）を追加
+- `SpecialRegPanel.vue`: フラグラベル右端に `flags.html` へのリンクアイコン（`menu_book`）を追加（右端揃え）
+- `src/assets/main.css`: `scrollbar-gutter: stable` を追加（RISC-V の32レジスタ表示時スクロールバー起因のレイアウトシフトを解消）
+- `ArchSwitch.vue`: ボタン順序を ARM → x86 → RISC-V に変更（ARM 第一方針を反映）、`min-w-32` を削除（モバイル表示崩れを解消）
+- i18n: ヘッダー説明文に RISC-V を追加（`'ARM Cortex-M / x86-64 / RISC-V アセンブラ学習ツール'`）
+- `StepController.vue`: ← → を `<kbd>` 要素でキーキャップスタイルに変更、テキストの ▶/◀ を削除（方向指示の二重表示を解消）
+- `App.vue`: アーキ選択ボタンとステップボタン間の余白を `space-y-2` → `space-y-3` に拡大
+
 ---
 
 ## フェーズ2以降の開発方針
 
 ### ARM先行・x86後追い戦略（完了）
 
-**ARM・x86 両アーキテクチャのステップ実行が完成した。**
-
-次のフェーズでは x86 の品質向上（対応命令の拡充・エッジケース対応）や新機能を検討する。
+**ARM・x86・RISC-V 3アーキテクチャのステップ実行が完成した（RISC-V は feature/rv32 ブランチ）。**
 
 **設計上の注意点（引き続き守ること）:**
-- 型定義・アーキ分岐構造は `'x86' | 'arm'` の2択を維持する
-- `src/core/simulator.ts` の「x86とARMの完全分離」ルールは維持する
+- 型定義・アーキ分岐構造は `'x86' | 'arm' | 'rv32'` の3択を維持する
+- `src/core/simulator.ts` の「アーキ完全分離」ルールは維持する（ARM/x86/RISC-V を混在させない）
 
 ---
 

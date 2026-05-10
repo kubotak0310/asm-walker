@@ -115,6 +115,10 @@
     .toc a { color: #0066cc; text-decoration: none; }
     .toc a:hover { text-decoration: underline; }
 
+    .hint { font-size: 0.85rem; color: #666; margin: 0.3rem 0 1rem; }
+    .hint a { color: #0066cc; text-decoration: none; }
+    .hint a:hover { text-decoration: underline; }
+
     .summary-table th { white-space: nowrap; }
     .summary-table td:nth-child(2), .summary-table td:nth-child(3) { font-family: "SFMono-Regular", monospace; font-size: 0.82em; }
 
@@ -153,33 +157,34 @@
   <div class="legend">
     <div class="legend-item"><div class="legend-swatch swatch-argret"></div>引数 &amp; 戻り値</div>
     <div class="legend-item"><div class="legend-swatch swatch-arg"></div>引数</div>
-    <div class="legend-item"><div class="legend-swatch swatch-saved"></div>Callee-saved（保存義務あり）</div>
     <div class="legend-item"><div class="legend-swatch swatch-special"></div>特殊用途</div>
   </div>
 
   <table>
     <thead>
-      <tr><th>レジスタ</th><th>ABI 別名</th><th>用途</th><th>保存義務</th></tr>
+      <tr><th>レジスタ</th><th>ABI 別名</th><th>用途</th><th>呼び出し後の値</th></tr>
     </thead>
     <tbody>
-      <tr class="arg-ret"><td><code>r0</code></td><td>a1</td><td>第1引数 / 戻り値（32bit）</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>r1</code></td><td>a2</td><td>第2引数 / 戻り値上位（64bit 返却時）</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>r2</code></td><td>a3</td><td>第3引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>r3</code></td><td>a4</td><td>第4引数</td><td>Caller-saved</td></tr>
-      <tr class="saved"><td><code>r4</code></td><td>v1</td><td>汎用（呼び出し後も保持される）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r5</code></td><td>v2</td><td>汎用（保存）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r6</code></td><td>v3</td><td>汎用（保存）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r7</code></td><td>v4 / FP</td><td>フレームポインタ（Thumb では慣例的に FP として使用）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r8</code></td><td>v5</td><td>汎用（保存）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r9</code></td><td>v6 / SB</td><td>汎用（保存）/ 静的ベースポインタ（PIC）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r10</code></td><td>v7</td><td>汎用（保存）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r11</code></td><td>v8 / FP</td><td>フレームポインタ（ARM モードでの慣例）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r12</code></td><td>IP</td><td>イントラプロシージャ呼び出し用スクラッチ</td><td>Caller-saved</td></tr>
+      <tr class="arg-ret"><td><code>r0</code></td><td>a1</td><td>汎用 / 第1引数 / 戻り値</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>r1</code></td><td>a2</td><td>汎用 / 第2引数 / 戻り値上位（64bit 値を返す場合）</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>r2</code></td><td>a3</td><td>汎用 / 第3引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>r3</code></td><td>a4</td><td>汎用 / 第4引数</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>r4</code></td><td>v1</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r5</code></td><td>v2</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r6</code></td><td>v3</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r7</code></td><td>v4 / FP</td><td>フレームポインタ（Thumb モード、ABI必須ではなくGCCの実装）</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r8</code></td><td>v5</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r9</code></td><td>v6 / SB</td><td>汎用 / 静的ベースポインタ（PIC）</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r10</code></td><td>v7</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r11</code></td><td>v8 / FP</td><td>フレームポインタ（ARM モード、ABI必須ではなくGCCの実装）</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r12</code></td><td>IP</td><td>イントラプロシージャ呼び出し用スクラッチ</td><td>変わる可能性あり</td></tr>
       <tr class="special"><td><code>r13</code></td><td>SP</td><td>スタックポインタ</td><td>—</td></tr>
       <tr class="special"><td><code>r14</code></td><td>LR</td><td>リンクレジスタ（戻り先アドレス）</td><td>—</td></tr>
       <tr class="special"><td><code>r15</code></td><td>PC</td><td>プログラムカウンタ（次に実行する命令のアドレス）</td><td>—</td></tr>
     </tbody>
   </table>
+
+  <p class="hint">※「変わる可能性あり」「保持される」の詳細は <a href="#caller-callee">4章「Caller-saved と Callee-saved」</a>を参照してください。</p>
 
   <div class="key">
     <strong>Thumb モードと FP の位置：</strong><br>
@@ -205,33 +210,34 @@
   <div class="legend">
     <div class="legend-item"><div class="legend-swatch swatch-argret"></div>引数 &amp; 戻り値</div>
     <div class="legend-item"><div class="legend-swatch swatch-arg"></div>引数</div>
-    <div class="legend-item"><div class="legend-swatch swatch-saved"></div>Callee-saved（保存義務あり）</div>
     <div class="legend-item"><div class="legend-swatch swatch-special"></div>特殊用途</div>
   </div>
 
   <table>
     <thead>
-      <tr><th>64bit</th><th>32bit</th><th>16bit</th><th>8bit</th><th>用途</th><th>保存義務</th></tr>
+      <tr><th>64bit</th><th>32bit</th><th>16bit</th><th>8bit</th><th>用途</th><th>呼び出し後の値</th></tr>
     </thead>
     <tbody>
-      <tr class="arg-ret"><td><code>rax</code></td><td><code>eax</code></td><td><code>ax</code></td><td><code>al</code></td><td>戻り値 / 一時</td><td>Caller-saved</td></tr>
-      <tr class="saved"><td><code>rbx</code></td><td><code>ebx</code></td><td><code>bx</code></td><td><code>bl</code></td><td>汎用（保存）</td><td>Callee-saved</td></tr>
-      <tr class="arg"><td><code>rcx</code></td><td><code>ecx</code></td><td><code>cx</code></td><td><code>cl</code></td><td>第4引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>rdx</code></td><td><code>edx</code></td><td><code>dx</code></td><td><code>dl</code></td><td>第3引数 / 戻り値上位（128bit 返却時）</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>rsi</code></td><td><code>esi</code></td><td><code>si</code></td><td><code>sil</code></td><td>第2引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>rdi</code></td><td><code>edi</code></td><td><code>di</code></td><td><code>dil</code></td><td>第1引数</td><td>Caller-saved</td></tr>
-      <tr class="special"><td><code>rbp</code></td><td><code>ebp</code></td><td><code>bp</code></td><td><code>bpl</code></td><td>フレームポインタ（ベースポインタ）</td><td>Callee-saved</td></tr>
+      <tr class="arg-ret"><td><code>rax</code></td><td><code>eax</code></td><td><code>ax</code></td><td><code>al</code></td><td>汎用 / 戻り値</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>rbx</code></td><td><code>ebx</code></td><td><code>bx</code></td><td><code>bl</code></td><td>汎用</td><td>保持される</td></tr>
+      <tr class="arg"><td><code>rcx</code></td><td><code>ecx</code></td><td><code>cx</code></td><td><code>cl</code></td><td>汎用 / 第4引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>rdx</code></td><td><code>edx</code></td><td><code>dx</code></td><td><code>dl</code></td><td>汎用 / 第3引数 / 戻り値上位（128bit 値を返す場合）</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>rsi</code></td><td><code>esi</code></td><td><code>si</code></td><td><code>sil</code></td><td>汎用 / 第2引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>rdi</code></td><td><code>edi</code></td><td><code>di</code></td><td><code>dil</code></td><td>汎用 / 第1引数</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>rbp</code></td><td><code>ebp</code></td><td><code>bp</code></td><td><code>bpl</code></td><td>フレームポインタ（ABI必須ではなくGCCの実装）</td><td>保持される</td></tr>
       <tr class="special"><td><code>rsp</code></td><td><code>esp</code></td><td><code>sp</code></td><td><code>spl</code></td><td>スタックポインタ</td><td>—</td></tr>
-      <tr class="arg"><td><code>r8</code></td><td><code>r8d</code></td><td><code>r8w</code></td><td><code>r8b</code></td><td>第5引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>r9</code></td><td><code>r9d</code></td><td><code>r9w</code></td><td><code>r9b</code></td><td>第6引数</td><td>Caller-saved</td></tr>
-      <tr class="saved"><td><code>r10</code></td><td><code>r10d</code></td><td><code>r10w</code></td><td><code>r10b</code></td><td>一時</td><td>Caller-saved</td></tr>
-      <tr class="saved"><td><code>r11</code></td><td><code>r11d</code></td><td><code>r11w</code></td><td><code>r11b</code></td><td>一時</td><td>Caller-saved</td></tr>
-      <tr class="saved"><td><code>r12</code></td><td><code>r12d</code></td><td><code>r12w</code></td><td><code>r12b</code></td><td>汎用（保存）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r13</code></td><td><code>r13d</code></td><td><code>r13w</code></td><td><code>r13b</code></td><td>汎用（保存）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r14</code></td><td><code>r14d</code></td><td><code>r14w</code></td><td><code>r14b</code></td><td>汎用（保存）</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>r15</code></td><td><code>r15d</code></td><td><code>r15w</code></td><td><code>r15b</code></td><td>汎用（保存）</td><td>Callee-saved</td></tr>
+      <tr class="arg"><td><code>r8</code></td><td><code>r8d</code></td><td><code>r8w</code></td><td><code>r8b</code></td><td>第5引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>r9</code></td><td><code>r9d</code></td><td><code>r9w</code></td><td><code>r9b</code></td><td>第6引数</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>r10</code></td><td><code>r10d</code></td><td><code>r10w</code></td><td><code>r10b</code></td><td>汎用</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>r11</code></td><td><code>r11d</code></td><td><code>r11w</code></td><td><code>r11b</code></td><td>汎用</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>r12</code></td><td><code>r12d</code></td><td><code>r12w</code></td><td><code>r12b</code></td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r13</code></td><td><code>r13d</code></td><td><code>r13w</code></td><td><code>r13b</code></td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r14</code></td><td><code>r14d</code></td><td><code>r14w</code></td><td><code>r14b</code></td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r15</code></td><td><code>r15d</code></td><td><code>r15w</code></td><td><code>r15b</code></td><td>汎用</td><td>保持される</td></tr>
     </tbody>
   </table>
+
+  <p class="hint">※「変わる可能性あり」「保持される」の詳細は <a href="#caller-callee">4章「Caller-saved と Callee-saved」</a>を参照してください。</p>
 
   <div class="key">
     <strong>32bit 名で書くと上位32bitが自動ゼロになる：</strong><br>
@@ -257,49 +263,50 @@
   <div class="legend">
     <div class="legend-item"><div class="legend-swatch swatch-argret"></div>引数 &amp; 戻り値</div>
     <div class="legend-item"><div class="legend-swatch swatch-arg"></div>引数</div>
-    <div class="legend-item"><div class="legend-swatch swatch-saved"></div>Callee-saved（保存義務あり）</div>
     <div class="legend-item"><div class="legend-swatch swatch-special"></div>特殊用途</div>
   </div>
 
   <table>
     <thead>
-      <tr><th>レジスタ番号</th><th>ABI 名</th><th>用途</th><th>保存義務</th></tr>
+      <tr><th>レジスタ番号</th><th>ABI 名</th><th>用途</th><th>呼び出し後の値</th></tr>
     </thead>
     <tbody>
       <tr class="special"><td><code>x0</code></td><td><code>zero</code></td><td>常に 0（ハードウェアで固定）</td><td>—</td></tr>
-      <tr class="special"><td><code>x1</code></td><td><code>ra</code></td><td>戻り先アドレス（Return Address）</td><td>Caller-saved</td></tr>
-      <tr class="special"><td><code>x2</code></td><td><code>sp</code></td><td>スタックポインタ</td><td>Callee-saved</td></tr>
+      <tr class="special"><td><code>x1</code></td><td><code>ra</code></td><td>戻り先アドレス（Return Address）</td><td>変わる可能性あり</td></tr>
+      <tr class="special"><td><code>x2</code></td><td><code>sp</code></td><td>スタックポインタ</td><td>保持される</td></tr>
       <tr class="special"><td><code>x3</code></td><td><code>gp</code></td><td>グローバルポインタ</td><td>—</td></tr>
       <tr class="special"><td><code>x4</code></td><td><code>tp</code></td><td>スレッドポインタ</td><td>—</td></tr>
-      <tr><td><code>x5</code></td><td><code>t0</code></td><td>一時レジスタ / 代替リンクレジスタ</td><td>Caller-saved</td></tr>
-      <tr><td><code>x6</code></td><td><code>t1</code></td><td>一時レジスタ</td><td>Caller-saved</td></tr>
-      <tr><td><code>x7</code></td><td><code>t2</code></td><td>一時レジスタ</td><td>Caller-saved</td></tr>
-      <tr class="saved"><td><code>x8</code></td><td><code>s0</code> / <code>fp</code></td><td>保存レジスタ / フレームポインタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x9</code></td><td><code>s1</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="arg-ret"><td><code>x10</code></td><td><code>a0</code></td><td>第1引数 / 戻り値</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>x11</code></td><td><code>a1</code></td><td>第2引数 / 戻り値上位（64bit 返却時）</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>x12</code></td><td><code>a2</code></td><td>第3引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>x13</code></td><td><code>a3</code></td><td>第4引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>x14</code></td><td><code>a4</code></td><td>第5引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>x15</code></td><td><code>a5</code></td><td>第6引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>x16</code></td><td><code>a6</code></td><td>第7引数</td><td>Caller-saved</td></tr>
-      <tr class="arg"><td><code>x17</code></td><td><code>a7</code></td><td>第8引数</td><td>Caller-saved</td></tr>
-      <tr class="saved"><td><code>x18</code></td><td><code>s2</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x19</code></td><td><code>s3</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x20</code></td><td><code>s4</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x21</code></td><td><code>s5</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x22</code></td><td><code>s6</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x23</code></td><td><code>s7</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x24</code></td><td><code>s8</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x25</code></td><td><code>s9</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x26</code></td><td><code>s10</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr class="saved"><td><code>x27</code></td><td><code>s11</code></td><td>保存レジスタ</td><td>Callee-saved</td></tr>
-      <tr><td><code>x28</code></td><td><code>t3</code></td><td>一時レジスタ</td><td>Caller-saved</td></tr>
-      <tr><td><code>x29</code></td><td><code>t4</code></td><td>一時レジスタ</td><td>Caller-saved</td></tr>
-      <tr><td><code>x30</code></td><td><code>t5</code></td><td>一時レジスタ</td><td>Caller-saved</td></tr>
-      <tr><td><code>x31</code></td><td><code>t6</code></td><td>一時レジスタ</td><td>Caller-saved</td></tr>
+      <tr><td><code>x5</code></td><td><code>t0</code></td><td>一時レジスタ / 代替リンクレジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x6</code></td><td><code>t1</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x7</code></td><td><code>t2</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>x8</code></td><td><code>s0</code> / <code>fp</code></td><td>保存レジスタ / フレームポインタ（ABI必須ではなくGCCの実装）</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x9</code></td><td><code>s1</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="arg-ret"><td><code>x10</code></td><td><code>a0</code></td><td>汎用 / 第1引数 / 戻り値</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x11</code></td><td><code>a1</code></td><td>汎用 / 第2引数 / 戻り値上位（64bit 値を返す場合）</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x12</code></td><td><code>a2</code></td><td>汎用 / 第3引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x13</code></td><td><code>a3</code></td><td>汎用 / 第4引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x14</code></td><td><code>a4</code></td><td>汎用 / 第5引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x15</code></td><td><code>a5</code></td><td>汎用 / 第6引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x16</code></td><td><code>a6</code></td><td>汎用 / 第7引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x17</code></td><td><code>a7</code></td><td>汎用 / 第8引数</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>x18</code></td><td><code>s2</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x19</code></td><td><code>s3</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x20</code></td><td><code>s4</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x21</code></td><td><code>s5</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x22</code></td><td><code>s6</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x23</code></td><td><code>s7</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x24</code></td><td><code>s8</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x25</code></td><td><code>s9</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x26</code></td><td><code>s10</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x27</code></td><td><code>s11</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr><td><code>x28</code></td><td><code>t3</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x29</code></td><td><code>t4</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x30</code></td><td><code>t5</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x31</code></td><td><code>t6</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
     </tbody>
   </table>
+
+  <p class="hint">※「変わる可能性あり」「保持される」の詳細は <a href="#caller-callee">4章「Caller-saved と Callee-saved」</a>を参照してください。</p>
 
   <div class="key">
     <strong><code>zero</code> レジスタ（x0）の活用：</strong><br>
@@ -342,13 +349,12 @@
 
   <p>コンパイラはこのルールに従ってコードを生成するため、呼び出し前後でレジスタ値が維持されるか否かが保証されます。アセンブラを読む際は「この命令実行後、このレジスタは変わるか？」を確認するのに役立ちます。</p>
 
-  <pre><code><span class="comment">; x86-64 の例: Callee-saved レジスタ rbx を使う関数</span>
+  <pre><code><span class="comment">; ARM の例: Callee-saved レジスタ r4 を使う関数</span>
 example:
-    push rbx          <span class="comment">; ← Callee が先頭で退避（Callee-saved 義務）</span>
-    mov  rbx, rdi     <span class="comment">; rbx に引数を保存して使いまわす</span>
+    push {r4, lr}     <span class="comment">; ← Callee が先頭で退避（r4 と戻り先 LR を保存）</span>
+    mov  r4, r0       <span class="comment">; r4 に引数を保存して使いまわす</span>
     ...
-    pop  rbx          <span class="comment">; ← return 前に復元（呼び出し元の rbx が壊れない）</span>
-    ret</code></pre>
+    pop  {r4, pc}     <span class="comment">; ← return 前に復元（呼び出し元の r4 が壊れない）+ 関数復帰</span></code></pre>
 
   <!-- ============================================================ -->
   <h2 id="summary">5. 引数・戻り値レジスタのまとめ</h2>

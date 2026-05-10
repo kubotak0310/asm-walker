@@ -1,6 +1,6 @@
 export default {
   app: {
-    subtitle: 'ARM Cortex-M / x86-64 Assembly Learning Tool',
+    subtitle: 'ARM Cortex-M / x86-64 / RISC-V Assembly Learning Tool',
     guide: 'Guide',
     guideItems: {
       machineCode: 'Machine Code & Assembly',
@@ -15,8 +15,8 @@ export default {
     },
   },
   stepController: {
-    prev: '◀ Back',
-    next: 'Next Step ▶',
+    prev: 'Back',
+    next: 'Next Step',
     reset: 'Reset',
   },
   cCompilePanel: {

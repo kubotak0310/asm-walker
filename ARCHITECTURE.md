@@ -25,8 +25,8 @@ asm-walker/
 ├── src/
 │   ├── components/
 │   │   ├── AppHeader.vue           # ヘッダー（ロゴ・EN/JA トグル・ガイドドロップダウン）
-│   │   ├── ArchSwitch.vue          # x86 / ARM 切り替えスイッチ
-│   │   ├── StepController.vue      # ◀ 戻る / 次のステップ ▶ / リセット / ステップカウンター（← → キーショートカット付き）
+│   │   ├── ArchSwitch.vue          # ARM / x86 / RISC-V 切り替えスイッチ（ARM 第一順）
+│   │   ├── StepController.vue      # 戻る [←] / [→] 次のステップ / リセット / ステップカウンター（キーキャップスタイル付き）
 │   │   ├── CSourcePanel.vue        # Cソース表示（コンパイル後のみ表示）
 │   │   ├── CodePanel.vue           # アセンブラ表示（PCアドレス付き、コメントは `;` 区切り）
 │   │   ├── ExplainPanel.vue        # 命令の説明（フルネーム・構文フォーマット・記法ヘルプ付き、EN/JA対応）
@@ -45,18 +45,23 @@ asm-walker/
 │   │   │   ├── interpreter.ts      # ParsedInstruction + MachineState → StateUpdate + 説明テキスト
 │   │   │   ├── tracer.ts           # 動的実行でスナップショット列を生成（cLineMap 引数追加）
 │   │   │   └── mnemonics.ts        # ARM命令フルネーム・構文フォーマットテーブル
-│   │   └── x86/
-│   │       ├── parser.ts           # x86-64 Intel構文パーサー（GCC -masm=intel 出力対応、サブレジスタ正規化）
-│   │       ├── interpreter.ts      # X86Instruction + MachineState → X86InterpretResult（30種以上の命令）
-│   │       ├── tracer.ts           # x86 動的実行トレーサー（CALL/RET スタック追跡）
-│   │       └── mnemonics.ts        # x86命令フルネーム・構文フォーマットテーブル
+│   │   ├── x86/
+│   │   │   ├── parser.ts           # x86-64 Intel構文パーサー（GCC -masm=intel 出力対応、サブレジスタ正規化）
+│   │   │   ├── interpreter.ts      # X86Instruction + MachineState → X86InterpretResult（30種以上の命令）
+│   │   │   ├── tracer.ts           # x86 動的実行トレーサー（CALL/RET スタック追跡）
+│   │   │   └── mnemonics.ts        # x86命令フルネーム・構文フォーマットテーブル
+│   │   └── rv32/
+│   │       ├── parser.ts           # RV32 アセンブラパーサー（offset(reg) 形式・疑似命令対応）
+│   │       ├── interpreter.ts      # RV32Instruction + MachineState → RV32InterpretResult（RV32IM 対応）
+│   │       ├── tracer.ts           # RV32 動的実行トレーサー（call/ret スタック追跡）
+│   │       └── mnemonics.ts        # RV32命令フルネーム・構文フォーマットテーブル
 │   ├── i18n/
 │   │   ├── index.ts                # createI18n 初期化（ブラウザ言語検出・localStorage 永続化）
 │   │   └── locales/
 │   │       ├── ja.ts               # 日本語ロケール定義
 │   │       └── en.ts               # 英語ロケール定義
 │   ├── samples/
-│   │   └── index.ts                # ARM_SAMPLES / X86_SAMPLES（各5種、SampleDef型）
+│   │   └── index.ts                # ARM_SAMPLES / X86_SAMPLES / RV32_SAMPLES（各5種、SampleDef型）
 │   │                               # SampleDef.name は { ja: string; en: string } 形式
 │   ├── composables/
 │   │   └── useSimulator.ts         # シミュレーター・アーキ状態管理（Vue Composable、シングルトン）
@@ -85,7 +90,7 @@ Vue 3 の Composition API + `reactive` / `ref` でグローバルな状態を管
 // モジュールレベルのシングルトン（ref / computed をモジュールスコープで保持）
 
 interface SimulatorState {
-  arch: 'x86' | 'arm'
+  arch: 'x86' | 'arm' | 'rv32'
   currentStep: number
   totalSteps: number          // preset.steps.length
   states: MachineState[]      // 各ステップのスナップショット配列

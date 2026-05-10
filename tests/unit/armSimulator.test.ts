@@ -112,6 +112,47 @@ main:
   })
 })
 
+describe('ARM Simulator: MOVW / MOVT', () => {
+  it('MOVW で下位16bitをロードし上位16bitがゼロになる', () => {
+    const asm = `
+main:
+    movw r0, #0x5678
+    bx   lr
+`
+    const { states, error } = trace(asm)
+    expect(error).toBeUndefined()
+    expect(states[1]!.regs.r0).toBe(0x5678)
+  })
+
+  it('MOVW + MOVT で任意の32bit値を構成できる', () => {
+    const asm = `
+main:
+    movw r0, #0x5678
+    movt r0, #0x1234
+    bx   lr
+`
+    const { states, error } = trace(asm)
+    expect(error).toBeUndefined()
+    expect(states[2]!.regs.r0).toBe(0x12345678)
+  })
+
+  it('MOVT は下位16bitを保持したまま上位16bitだけ書き換える', () => {
+    const asm = `
+main:
+    movw r1, #0xABCD
+    movw r0, #0x0004
+    movt r0, #0x2000
+    bx   lr
+`
+    const { states, error } = trace(asm)
+    expect(error).toBeUndefined()
+    // r1 は MOVT の影響を受けない
+    expect(states[2]!.regs.r1).toBe(0xABCD)
+    // r0 = 0x20000004
+    expect(states[3]!.regs.r0).toBe(0x20000004)
+  })
+})
+
 describe('buildStates: applyUpdate', () => {
   it('stackSet が正しくスタックに書き込まれる', () => {
     const next = applyUpdate(INITIAL_STATE, {

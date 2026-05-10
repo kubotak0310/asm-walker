@@ -70,6 +70,13 @@
             <option value="-O1">-O1</option>
             <option value="-O2">-O2</option>
           </select>
+          <label
+            :class="['flex items-center gap-1.5 text-xs shrink-0 select-none', optLevel === '-O0' ? 'text-gray-500 cursor-default' : 'text-gray-300 cursor-pointer']"
+            :title="$t('cCompilePanel.noInlineTitle')"
+          >
+            <input type="checkbox" v-model="noInline" :disabled="optLevel === '-O0'" class="accent-blue-500 w-3.5 h-3.5" :class="optLevel === '-O0' ? 'cursor-default opacity-40' : 'cursor-pointer'" />
+            {{ $t('cCompilePanel.noInline') }}
+          </label>
           <input
             v-model="extraFlags"
             type="text"
@@ -94,7 +101,7 @@
             <span>{{ isCompiling ? $t('cCompilePanel.compiling') : $t('cCompilePanel.compileBtn') }}</span>
           </button>
           <span v-if="!isCompiling && !errors.length" class="text-gray-500 text-xs font-mono">
-            {{ arch === 'arm' ? 'ARM' : arch === 'rv32' ? 'RISC-V RV32' : 'x86-64' }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}
+            {{ arch === 'arm' ? 'ARM' : arch === 'rv32' ? 'RISC-V RV32' : 'x86-64' }} / {{ optLevel }}{{ displayFlags ? ' ' + displayFlags : '' }}
           </span>
         </div>
         <div v-if="gccOutput" class="rounded overflow-hidden border border-gray-600">
@@ -167,10 +174,17 @@ const editorEl = ref<HTMLElement | null>(null)
 const compilerId = ref('carmug1520')
 const optLevel = ref('-O0')
 const extraFlags = ref('-mcpu=cortex-m3 -mthumb')
+const noInline = ref(true)
 const selectedSampleId = ref(SAMPLES[0]?.id ?? '')
 const errors = ref<string[]>([])
 const hasResult = ref(false)
 let view: EditorView | null = null
+
+// コンパイル時・表示時に使う実効フラグ文字列（noInline が true なら -fno-inline を付加）
+const displayFlags = computed(() => {
+  const parts = [extraFlags.value, noInline.value ? '-fno-inline' : '']
+  return parts.filter(Boolean).join(' ')
+})
 
 const compilerDisplayName = computed(() =>
   ALL_COMPILERS.find(c => c.id === compilerId.value)?.name ?? compilerId.value
@@ -181,7 +195,7 @@ const compileBarState = computed(() => {
   if (callTarget.value) return { type: 'call' as const, display: callDisplay.value }
   if (isReturnStep.value) return { type: 'return' as const, func: currentFuncName.value, reg: returnReg.value, hex: returnHex.value, dec: returnDec.value }
   if (currentStep.value > 0) return { type: 'running' as const, display: capturedCallDisplay.value ?? `${currentFuncName.value}()` }
-  return { type: 'success' as const, compiler: compilerDisplayName.value, opt: optLevel.value, extra: extraFlags.value }
+  return { type: 'success' as const, compiler: compilerDisplayName.value, opt: optLevel.value, extra: displayFlags.value }
 })
 
 const DEFAULT_TEXT = SAMPLES[0]?.cCode ?? ''
@@ -264,7 +278,7 @@ async function compile() {
   errors.value = []
   hasResult.value = false
   const source = view.state.doc.toString()
-  const flags = [optLevel.value, extraFlags.value].filter(Boolean).join(' ')
+  const flags = [optLevel.value, displayFlags.value].filter(Boolean).join(' ')
   await simulateCompiled(source, compilerId.value, flags)
   if (!compileError.value) hasResult.value = true
 }

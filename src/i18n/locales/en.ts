@@ -40,6 +40,8 @@ export default {
     abiRetArm: 'ARM ABI: r0 holds the return value',
     abiRetX86: 'x86-64 ABI: rax holds the return value',
     abiRetRv32: 'RISC-V ABI: a0 holds the return value',
+    noInline: 'No Inline',
+    noInlineTitle: 'Suppress function inlining (-fno-inline). Keeps function calls visible for learning.',
     gccOutput: 'Compiler output (gcc stderr)',
     simError: 'Simulator error',
   },

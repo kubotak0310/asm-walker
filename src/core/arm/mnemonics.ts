@@ -1,7 +1,7 @@
 // ARM mnemonic lookup tables: full names and syntax formats
 
 export const FULL_NAMES: Record<string, string> = {
-  MOV: 'MOVE', MVN: 'MOVE NOT',
+  MOV: 'MOVE', MVN: 'MOVE NOT', MOVW: 'MOVE WIDE', MOVT: 'MOVE TOP',
   ADD: 'ADD', ADC: 'ADD WITH CARRY',
   SUB: 'SUBTRACT', SBC: 'SUBTRACT WITH CARRY', RSB: 'REVERSE SUBTRACT',
   MUL: 'MULTIPLY', MLA: 'MULTIPLY ACCUMULATE', MLS: 'MULTIPLY SUBTRACT',
@@ -30,6 +30,7 @@ export const FULL_NAMES: Record<string, string> = {
 
 export const SYNTAX: Record<string, string> = {
   MOV: 'MOV{S} Rd, Rn / #imm', MVN: 'MVN{S} Rd, Rn / #imm',
+  MOVW: 'MOVW Rd, #imm16', MOVT: 'MOVT Rd, #imm16',
   ADD: 'ADD{S} Rd, Rn, Rm / #imm', ADC: 'ADC{S} Rd, Rn, Rm',
   SUB: 'SUB{S} Rd, Rn, Rm / #imm', SBC: 'SBC{S} Rd, Rn, Rm', RSB: 'RSB{S} Rd, Rn, #imm',
   MUL: 'MUL{S} Rd, Rn, Rm', MLA: 'MLA{S} Rd, Rn, Rm, Ra', MLS: 'MLS Rd, Rn, Rm, Ra',

@@ -40,6 +40,8 @@ export default {
     abiRetArm: 'ARM ABI: r0 が関数の戻り値レジスタ',
     abiRetX86: 'x86-64 ABI: rax が戻り値レジスタ',
     abiRetRv32: 'RISC-V ABI: a0 が戻り値レジスタ',
+    noInline: 'インライン抑制',
+    noInlineTitle: 'インライン展開を抑制します（-fno-inline を自動付加）。関数呼び出しの学習に効果的です',
     gccOutput: 'コンパイラ出力 (gcc stderr)',
     simError: 'シミュレーターエラー',
   },

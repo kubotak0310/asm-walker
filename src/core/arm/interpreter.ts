@@ -68,6 +68,8 @@ const ARM_COMMENTS: Record<Locale, ArmCommentDict> = {
 
 type ArmExplainDict = {
   mov(dst: string, withFlags: boolean): string
+  movw(): string
+  movt(): string
   add(withFlags: boolean): string
   sub(withFlags: boolean): string
   mul(withFlags: boolean): string
@@ -93,6 +95,8 @@ type ArmExplainDict = {
 const ARM_EXPLAINS: Record<Locale, ArmExplainDict> = {
   ja: {
     mov: (dst, f) => `${dst} に値をセット${f ? '（フラグ更新）' : ''}`,
+    movw: () => '下位16bitをロード（上位16bitはゼロ）',
+    movt: () => '上位16bitをセット（下位16bitは保持）',
     add: (f) => `加算${f ? '（フラグ更新）' : ''}`,
     sub: (f) => `減算${f ? '（フラグ更新）' : ''}`,
     mul: (f) => `乗算${f ? '（フラグ更新）' : ''}`,
@@ -116,6 +120,8 @@ const ARM_EXPLAINS: Record<Locale, ArmExplainDict> = {
   },
   en: {
     mov: (dst, f) => `Move to ${dst}${f ? ' (with flags)' : ''}`,
+    movw: () => 'Load lower 16 bits (upper 16 bits zeroed)',
+    movt: () => 'Set upper 16 bits (lower 16 bits preserved)',
     add: (f) => f ? 'Add (with flags)' : 'Add',
     sub: (f) => f ? 'Subtract (with flags)' : 'Subtract',
     mul: (f) => f ? 'Multiply (with flags)' : 'Multiply',
@@ -366,11 +372,41 @@ function handleDataTransfer(
   state: MachineState, phase: Phase, defaultNext: number, raw: string,
   locale: Locale,
 ): InterpretResult | { error: string } | null {
-  if (mnemonic !== 'MOV' && mnemonic !== 'MVN') return null
+  if (mnemonic !== 'MOV' && mnemonic !== 'MVN' && mnemonic !== 'MOVW' && mnemonic !== 'MOVT') return null
   const dst = operands[0]
   const src = operands[1]
   if (dst?.type !== 'reg') return { error: `${mnemonic}: レジスタが必要: ${raw}` }
   if (dst.name === 'pc') return { error: 'PC への直接書き込みは非対応 (BX LR を使用)' }
+
+  // MOVW: 下位16bitに即値をロード、上位16bitをゼロクリア
+  if (mnemonic === 'MOVW') {
+    const imm16 = resolveVal(src, state) & 0xFFFF
+    const val = imm16 >>> 0
+    const comment = `${dst.name}[15:0] ← 0x${imm16.toString(16)}`
+    return {
+      update: { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 },
+      explain: ARM_EXPLAINS[locale].movw(),
+      effect: `${dst.name} ← ${hexU32(val)}`,
+      comment,
+      phase, nextInstrIdx: defaultNext,
+    }
+  }
+
+  // MOVT: 上位16bitに即値をセット、下位16bitは現在値を保持
+  if (mnemonic === 'MOVT') {
+    const imm16 = resolveVal(src, state) & 0xFFFF
+    const currentVal = getReg(dst.name, state)
+    const val = (((imm16 << 16) >>> 0) | (currentVal & 0xFFFF)) >>> 0
+    const comment = `${dst.name}[31:16] ← 0x${imm16.toString(16)} → ${dst.name}=${hexU32(val)}`
+    return {
+      update: { ...setRegUpdate(dst.name, val), pc: BASE_PC + defaultNext * 4 },
+      explain: ARM_EXPLAINS[locale].movt(),
+      effect: `${dst.name} ← ${hexU32(val)}`,
+      comment,
+      phase, nextInstrIdx: defaultNext,
+    }
+  }
+
   const srcVal = resolveVal(src, state)
   let val = srcVal >>> 0
   if (mnemonic === 'MVN') val = (~val) >>> 0
@@ -643,10 +679,13 @@ function handleLoad(
   const src = operands[1]
   if (dst?.type !== 'reg') return { error: `LDR: レジスタが必要: ${raw}` }
 
-  // PC-relative literal pool load: `ldr r2, .L5`
-  // Resolve label → ROM address, then read from state.stack (pre-populated with romData)
+  // PC-relative literal pool load: `ldr r2, .L5` or `ldr r2, .L5+4`
+  // `.L5+4` は 2番目の .word を指す — ラベル名から +offset を分離して解決する
   if (src?.type === 'label') {
-    const romAddr = dataLabels.get(src.name) ?? 0
+    const plusIdx = src.name.indexOf('+')
+    const baseName = plusIdx >= 0 ? src.name.slice(0, plusIdx) : src.name
+    const labelOffset = plusIdx >= 0 ? parseInt(src.name.slice(plusIdx + 1), 10) : 0
+    const romAddr = (dataLabels.get(baseName) ?? 0) + labelOffset
     const val = state.stack[romAddr] ?? 0
     const comment = `${dst.name} ← ${fmtDec(val)}（定数プール）`
     return {

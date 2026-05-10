@@ -74,15 +74,20 @@ import { useSimulator } from '@/composables/useSimulator'
 import BadgeLabel from './BadgeLabel.vue'
 import { getFullName as getFullNameARM, getSyntax as getSyntaxARM } from '@/core/arm/mnemonics'
 import { getFullName as getFullNameX86, getSyntax as getSyntaxX86 } from '@/core/x86/mnemonics'
+import { getFullName as getFullNameRV32, getSyntax as getSyntaxRV32 } from '@/core/rv32/mnemonics'
 
 const { arch, currentStepData, preset } = useSimulator()
 const { tm } = useI18n()
 
 function getFullName(instr: string): string | undefined {
-  return arch.value === 'x86' ? getFullNameX86(instr) : getFullNameARM(instr)
+  if (arch.value === 'x86') return getFullNameX86(instr)
+  if (arch.value === 'rv32') return getFullNameRV32(instr)
+  return getFullNameARM(instr)
 }
 function getSyntax(instr: string): string | undefined {
-  return arch.value === 'x86' ? getSyntaxX86(instr) : getSyntaxARM(instr)
+  if (arch.value === 'x86') return getSyntaxX86(instr)
+  if (arch.value === 'rv32') return getSyntaxRV32(instr)
+  return getSyntaxARM(instr)
 }
 
 const showHelp = ref(false)
@@ -99,7 +104,9 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
 watch(currentStepData, () => { showHelp.value = false })
 
 const HELP_ROWS = computed(() => {
-  const key = arch.value === 'x86' ? 'explainPanel.helpX86' : 'explainPanel.helpArm'
+  const key = arch.value === 'x86' ? 'explainPanel.helpX86'
+    : arch.value === 'rv32' ? 'explainPanel.helpRv32'
+    : 'explainPanel.helpArm'
   return tm(key) as { sym: string; desc: string; ex: string }[]
 })
 

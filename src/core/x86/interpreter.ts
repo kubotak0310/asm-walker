@@ -804,8 +804,11 @@ function handleBranchX86(
     const rbpVal = readMem(newSp, state)
     const finalSp = (newSp + 8) >>> 0
     const comment = `rsp ← rbp(${hexU32(state.fp)}); rbp ← [rsp](${fmtDec(rbpVal)}); rsp ← ${hexU32(finalSp)}`
+    // mov rsp,rbp で解放されるローカル変数領域 [old rsp, rbp) のエントリも削除する
+    const localEntries = Object.keys(state.stack).map(Number)
+      .filter(a => a >= state.sp && a < newSp)
     return makeResult(ctx,
-      { sp: finalSp, fp: rbpVal, stackRemove: [newSp] },
+      { sp: finalSp, fp: rbpVal, stackRemove: [newSp, ...localEntries] },
       E.leave, comment, comment,
     )
   }

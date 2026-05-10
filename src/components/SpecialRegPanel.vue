@@ -3,12 +3,19 @@
     <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold">{{ $t('specialRegPanel.header') }}</div>
     <div class="p-2 space-y-1 font-mono text-xs">
       <RegRow :label="arch === 'x86' ? 'RSP' : 'SP'" :sub-label="arch === 'x86' ? 'Stack Pointer' : undefined" :value="state.sp" :prev="prev?.sp" :changed="state.sp !== prev?.sp" kind="orange" />
-      <RegRow :label="arch === 'x86' ? 'RBP' : 'FP'" :sub-label="arch === 'x86' ? 'Base Pointer' : undefined" :value="fpValue" :prev="prevFpValue" :changed="fpValue !== prevFpValue" kind="normal" />
+      <RegRow
+        v-if="arch !== 'rv32'"
+        :label="arch === 'x86' ? 'RBP' : 'FP'"
+        :sub-label="arch === 'x86' ? 'Base Pointer' : undefined"
+        :value="fpValue" :prev="prevFpValue" :changed="fpValue !== prevFpValue" kind="normal"
+      />
+      <RegRow v-if="arch === 'rv32'" label="FP/s0" :value="rv32FpValue" :prev="prevRv32FpValue" :changed="rv32FpValue !== prevRv32FpValue" kind="normal" />
       <RegRow v-if="arch === 'arm'" label="LR" :value="state.lr" :prev="prev?.lr" :changed="state.lr !== prev?.lr" kind="normal" />
+      <RegRow v-if="arch === 'rv32'" label="RA" :value="rv32RaValue" :prev="prevRv32RaValue" :changed="rv32RaValue !== prevRv32RaValue" kind="normal" />
       <RegRow :label="arch === 'x86' ? 'RIP' : 'PC'" :sub-label="arch === 'x86' ? 'Instruction Pointer' : undefined" :value="displayPc" :changed="displayPcChanged" kind="normal" />
 
-      <!-- Flags -->
-      <div class="pt-1 border-t border-gray-700 mt-1">
+      <!-- Flags: RISC-V にはフラグレジスタが存在しないため非表示 -->
+      <div v-if="arch !== 'rv32'" class="pt-1 border-t border-gray-700 mt-1">
         <div class="text-gray-400 mb-1">{{ $t('specialRegPanel.flags') }}</div>
         <div class="flex gap-2 flex-wrap">
           <FlagBit v-for="f in flags" :key="f.name" :name="f.name" :value="f.value" :changed="f.changed" />
@@ -32,6 +39,12 @@ const fpValue = computed(() =>
 const prevFpValue = computed(() =>
   arch.value === 'arm' ? (prev.value?.regs['r11'] ?? 0) : (prev.value?.fp ?? 0),
 )
+
+// rv32: s0 がフレームポインタ相当、ra が戻りアドレスレジスタ
+const rv32FpValue = computed(() => state.value.regs['s0'] ?? 0)
+const prevRv32FpValue = computed(() => prev.value?.regs['s0'] ?? 0)
+const rv32RaValue = computed(() => state.value.regs['ra'] ?? 0)
+const prevRv32RaValue = computed(() => prev.value?.regs['ra'] ?? 0)
 
 const flags = computed(() => {
   const cur = state.value.flags

@@ -72,8 +72,9 @@
       <tr><th>Architecture</th><th>Compiler</th><th>Syntax</th></tr>
     </thead>
     <tbody>
-      <tr><td>ARM Cortex-M</td><td>ARM GCC 11.2.1 / 13.2.0 / 14.3.0</td><td>ARM syntax</td></tr>
+      <tr><td>ARM Cortex-M</td><td>ARM GCC 11.2.1 / 13.2.0 / 14.3.0 / 15.2.0</td><td>ARM syntax</td></tr>
       <tr><td>x86-64</td><td>x86-64 GCC 14.2.0</td><td>Intel syntax (<code>-masm=intel</code>)</td></tr>
+      <tr><td>RISC-V RV32IM</td><td>GCC 13.2.0 (<code>-march=rv32im -mabi=ilp32</code>)</td><td>RISC-V ASM syntax</td></tr>
     </tbody>
   </table>
 
@@ -101,6 +102,7 @@
     <tbody>
       <tr><td>x86-64</td><td><code>0x401000</code></td><td>instr 0=0x401000, instr 1=0x401004 …</td></tr>
       <tr><td>ARM Cortex-M</td><td><code>0x08000000</code></td><td>instr 0=0x08000000, instr 1=0x08000004 …</td></tr>
+      <tr><td>RISC-V RV32</td><td><code>0x00010000</code></td><td>instr 0=0x00010000, instr 1=0x00010004 …</td></tr>
     </tbody>
   </table>
 
@@ -113,6 +115,7 @@
     <tbody>
       <tr><td>x86-64</td><td>1–15 bytes (variable)</td><td>Fixed 4 bytes</td></tr>
       <tr><td>ARM Thumb2</td><td>2 or 4 bytes (mixed)</td><td>Fixed 4 bytes</td></tr>
+      <tr><td>RISC-V RV32I</td><td>4 bytes fixed (excl. C extension)</td><td>Fixed 4 bytes</td></tr>
     </tbody>
   </table>
   <div class="note">
@@ -132,6 +135,7 @@
   </p>
   <p>Supported instructions (x86-64): <code>MOV / LEA / PUSH / POP / ADD / SUB / IMUL / IDIV / AND / OR / XOR / SHL / SHR / CMP / TEST / JMP / Jcc / CALL / RET / LEAVE</code> and more</p>
   <p>Supported instructions (ARM): <code>MOV / LDR / STR / ADD / SUB / MUL / CMP / B / BL / BX / PUSH / POP / LSL / LSR</code> and more</p>
+  <p>Supported instructions (RISC-V RV32IM): <code>ADD / ADDI / SUB / LUI / AUIPC / AND / OR / XOR / SLL / SRL / SRA / SLT / LW / SW / BEQ / BNE / BLT / BGE / JAL / JALR / CALL / RET / MUL / DIV</code> and more</p>
 
   <h2 id="guides">Learning Guides</h2>
   <p>Explanatory pages are available to help you understand how assembly works at a deeper level.</p>

@@ -1,7 +1,7 @@
 // MachineState の不変更新ユーティリティ。インタープリタが作った StateUpdate を前の状態に適用し
 // 新しいスナップショットを返す。直接ミュートしないことでステップの前後移動を O(1) で実現する。
 
-import type { MachineState, StateUpdate } from './types'
+import type { Arch, MachineState, StateUpdate } from './types'
 
 /**
  * StateUpdate を前の状態に適用し、新しい MachineState スナップショットを返す。
@@ -104,10 +104,11 @@ export function hexU32(v: number): string {
  * 実際の仮想スタック領域に近い範囲のみを対象にすることで誤検知を減らしている。
  *
  * @param val - 判定するレジスタの値
- * @param arch - アーキテクチャ種別（'x86' | 'arm'）
+ * @param arch - アーキテクチャ種別
  * @returns スタック領域付近のアドレスと見なせる場合は true
  */
-export function isAddressLike(val: number, arch: 'x86' | 'arm'): boolean {
-  if (arch === 'x86') return val >= 0x7ff000 && val <= 0x800000
+export function isAddressLike(val: number, arch: Arch): boolean {
+  if (arch === 'x86')  return val >= 0x7ff000  && val <= 0x800000
+  if (arch === 'rv32') return val >= 0x00070000 && val <= 0x00080000
   return val >= 0x20007000 && val <= 0x20009000
 }

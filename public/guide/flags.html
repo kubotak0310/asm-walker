@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>フラグレジスタ — AsmWalker ガイド</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .flag-badge {
+      display: inline-block;
+      font-family: "SFMono-Regular", monospace;
+      font-size: 1rem;
+      font-weight: bold;
+      width: 2rem;
+      height: 2rem;
+      line-height: 2rem;
+      text-align: center;
+      border-radius: 4px;
+      vertical-align: middle;
+      margin-right: 0.25rem;
+    }
+    .flag-n { background: #ffe0e0; color: #b71c1c; border: 1px solid #ef9a9a; }
+    .flag-z { background: #e0f0e0; color: #1b5e20; border: 1px solid #a5d6a7; }
+    .flag-c { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+    .flag-v { background: #ede7ff; color: #4527a0; border: 1px solid #b39ddb; }
+    .flag-sf { background: #ffe0e0; color: #b71c1c; border: 1px solid #ef9a9a; }
+    .flag-zf { background: #e0f0e0; color: #1b5e20; border: 1px solid #a5d6a7; }
+    .flag-cf { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+    .flag-of { background: #ede7ff; color: #4527a0; border: 1px solid #b39ddb; }
+    .flag-pf { background: #e8f4fd; color: #0d47a1; border: 1px solid #90caf9; }
+
+    .arch-label {
+      display: inline-block;
+      padding: 0.15em 0.6em;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .arch-arm  { background: #ede7ff; color: #5c35b5; border: 1px solid #c4b0ff; }
+    .arch-x86  { background: #e0edff; color: #1a5fa8; border: 1px solid #a8c8ff; }
+    .arch-rv32 { background: #e2f5e8; color: #2a7a3b; border: 1px solid #8fd4a0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .rv32-box {
+      background: #f0faf2;
+      border: 1px solid #8fd4a0;
+      border-left: 4px solid #2da44e;
+      border-radius: 0 6px 6px 0;
+      padding: 0.9rem 1.1rem;
+      margin: 1.2rem 0;
+    }
+
+    .cond-table td:first-child { font-family: monospace; white-space: nowrap; }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+  <h1>フラグレジスタ</h1>
+  <p>演算結果の「性質」を1ビットで記録する特殊なレジスタ群を <strong>フラグレジスタ</strong> と呼びます。
+  条件分岐命令はこのフラグを読み取ってジャンプするかどうかを決定します。
+  ARM と x86 にはフラグレジスタがありますが、RISC-V には存在しません。</p>
+
+  <div class="toc">
+    <h4>目次</h4>
+    <ol>
+      <li><a href="#arm">ARM フラグ（CPSR: N / Z / C / V）</a></li>
+      <li><a href="#x86">x86-64 フラグ（RFLAGS: ZF / CF / SF / OF）</a></li>
+      <li><a href="#rv32">RISC-V のフラグなし設計</a></li>
+      <li><a href="#branch">フラグと条件分岐の関係</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="arm">1. ARM フラグ（CPSR）</h2>
+
+  <span class="arch-label arch-arm">ARM Cortex-M / CPSR</span>
+
+  <p>ARM は <strong>CPSR（Current Program Status Register）</strong> の上位4ビットにフラグを持ちます。
+  <code>ADDS</code>・<code>SUBS</code>・<code>CMP</code>・<code>TST</code> などの命令で更新され、<code>BEQ</code>・<code>BLT</code> などの条件分岐命令で参照されます。</p>
+
+  <table>
+    <thead>
+      <tr><th>フラグ</th><th>名前</th><th>セットされる条件</th><th>典型的な使用場面</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="flag-badge flag-n">N</span> Negative</td>
+        <td>負フラグ</td>
+        <td>演算結果の最上位ビット（ビット31）が 1（符号付き演算で結果が負）</td>
+        <td><code>BMI</code>（結果が負ならジャンプ）</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-z">Z</span> Zero</td>
+        <td>ゼロフラグ</td>
+        <td>演算結果がちょうど 0</td>
+        <td><code>BEQ</code>（等しい）・<code>BNE</code>（等しくない）</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-c">C</span> Carry</td>
+        <td>キャリーフラグ</td>
+        <td>加算で 32bit からあふれる繰り上がり発生、または減算で借りが<strong>発生しなかった</strong>とき</td>
+        <td><code>BCS</code>（繰り上がりあり）・符号なし比較（<code>BHI</code>/<code>BLS</code>）</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-v">V</span> Overflow</td>
+        <td>オーバーフローフラグ</td>
+        <td>符号付き演算で結果が -2³¹〜2³¹-1 の範囲を超えた（正+正=負、または負+負=正になった）</td>
+        <td><code>BVS</code>（オーバーフロー）・符号付き比較（<code>BGT</code>/<code>BLE</code>）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>ARM の C フラグは x86 と向きが逆：</strong><br>
+    ARM の減算（<code>SUB</code>/<code>CMP</code>）で C フラグは「<strong>借りが発生しなかった</strong>」ときに 1 になります。
+    x86 の CF は「借りが発生した」ときに 1 になるため、向きが逆です。
+    AsmWalker の特殊レジスタパネルには C フラグの値がリアルタイムで表示されます。
+  </div>
+
+  <h3>命令に付けるフラグ更新サフィックス</h3>
+  <p>ARM は命令名に <code>S</code> を付けると演算結果でフラグを更新します。付けない場合はフラグは変化しません。</p>
+
+  <pre><code>MOV  r0, #0     <span class="comment">; r0 = 0。フラグは変わらない</span>
+MOVS r0, #0     <span class="comment">; r0 = 0。結果が 0 なので Z=1, N=0 に更新される</span>
+
+CMP  r0, r1     <span class="comment">; r0 - r1 を計算してフラグだけを更新（S なしでも常に更新）</span>
+BEQ  label      <span class="comment">; Z=1 ならジャンプ（= r0 == r1）</span></code></pre>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    ARM サンプル（条件分岐）をコンパイルしてステップを進めると、<code>CMP</code> 命令のステップで特殊レジスタパネルのフラグが更新されるのが確認できます。
+    その後の <code>BEQ</code>/<code>BNE</code> のステップでどのフラグが参照されてジャンプが起きるかも追跡できます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="x86">2. x86-64 フラグ（RFLAGS）</h2>
+
+  <span class="arch-label arch-x86">x86-64 / RFLAGS</span>
+
+  <p>x86-64 は <strong>RFLAGS</strong> レジスタ（64bit）に多数のフラグを持ちます。アセンブラコードで頻繁に使われる主要フラグは4〜5個です。
+  <code>CMP</code>・<code>TEST</code>・<code>ADD</code>・<code>SUB</code> などで更新され、<code>JE</code>・<code>JL</code> などの条件ジャンプで参照されます。</p>
+
+  <table>
+    <thead>
+      <tr><th>フラグ</th><th>名前</th><th>セットされる条件</th><th>典型的な使用場面</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="flag-badge flag-zf">ZF</span></td>
+        <td>Zero Flag</td>
+        <td>演算結果がちょうど 0</td>
+        <td><code>JE</code>（等しい）・<code>JNE</code>（等しくない）</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-sf">SF</span></td>
+        <td>Sign Flag</td>
+        <td>演算結果の最上位ビットが 1（負の数）</td>
+        <td><code>JS</code>（負）・符号付き比較との組み合わせ</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-cf">CF</span></td>
+        <td>Carry Flag</td>
+        <td>符号なし演算で桁あふれ（加算で繰り上がり・減算で借りが発生）</td>
+        <td><code>JB</code>（符号なし未満）・<code>JAE</code>（符号なし以上）</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-of">OF</span></td>
+        <td>Overflow Flag</td>
+        <td>符号付き演算でオーバーフロー（正+正=負、または負+負=正になった）</td>
+        <td><code>JO</code>（オーバーフロー）・符号付き比較（<code>JL</code>/<code>JGE</code>）</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-pf">PF</span></td>
+        <td>Parity Flag</td>
+        <td>結果の下位8ビット中の 1 の個数が偶数</td>
+        <td>浮動小数点比較・一部の暗号処理（日常のコードではほぼ不使用）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>CMP と TEST の違い</h3>
+
+  <pre><code>CMP  rax, rbx    <span class="comment">; rax - rbx を計算し、フラグのみ更新（rax は変化しない）</span>
+TEST rax, rax    <span class="comment">; rax AND rax を計算し、フラグのみ更新（ゼロチェックによく使われる）</span>
+
+<span class="comment">; 条件ジャンプの例</span>
+cmp  eax, 0      <span class="comment">; eax - 0 → eax が 0 なら ZF=1</span>
+je   .zero       <span class="comment">; ZF=1 なら .zero へジャンプ（= eax == 0）</span>
+
+test eax, eax    <span class="comment">; eax & eax → eax が 0 なら ZF=1（cmp eax, 0 と等価だが1バイト短い）</span>
+jne  .nonzero    <span class="comment">; ZF=0 なら .nonzero へジャンプ（= eax != 0）</span></code></pre>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    x86 サンプル（条件分岐）をコンパイルしてステップを進めると、<code>CMP</code>/<code>TEST</code> 命令のステップで特殊レジスタパネルのフラグ（ZF/SF/CF/OF）が更新されます。
+    その後の <code>JE</code>/<code>JL</code> 等のステップでジャンプが実際に起きるかどうかが確認できます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="rv32">3. RISC-V のフラグなし設計</h2>
+
+  <span class="arch-label arch-rv32">RISC-V RV32 / フラグレジスタなし</span>
+
+  <div class="rv32-box">
+    <strong>RISC-V にフラグレジスタは存在しません。</strong><br><br>
+    ARM や x86 は「比較命令でフラグをセット → 条件ジャンプ命令でフラグを読む」という2ステップを踏みます。
+    RISC-V は <strong>1命令で比較とジャンプを同時に行います</strong>。
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>アーキ</th><th>「a == b ならジャンプ」の実装</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="arch-label arch-arm">ARM</span></td>
+        <td>
+          <code>CMP r0, r1</code>（r0 - r1 でフラグ更新）<br>
+          <code>BEQ label</code>（ZF=1 ならジャンプ）
+        </td>
+      </tr>
+      <tr>
+        <td><span class="arch-label arch-x86">x86-64</span></td>
+        <td>
+          <code>CMP eax, ebx</code>（eax - ebx でフラグ更新）<br>
+          <code>JE label</code>（ZF=1 ならジャンプ）
+        </td>
+      </tr>
+      <tr>
+        <td><span class="arch-label arch-rv32">RISC-V</span></td>
+        <td>
+          <code>beq a0, a1, label</code>（a0 == a1 なら label へ — 1命令で完結）
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>RISC-V の分岐命令（<code>beq</code>, <code>bne</code>, <code>blt</code>, <code>bge</code>, <code>bltu</code>, <code>bgeu</code>）はすべて「2つのレジスタを比較してジャンプ」という形式です。フラグを経由しないため、AsmWalker の特殊レジスタパネルにフラグ欄は表示されません。</p>
+
+  <table>
+    <thead>
+      <tr><th>命令</th><th>条件</th><th>備考</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>beq rs1, rs2, label</code></td><td>rs1 == rs2</td><td>Branch if Equal</td></tr>
+      <tr><td><code>bne rs1, rs2, label</code></td><td>rs1 != rs2</td><td>Branch if Not Equal</td></tr>
+      <tr><td><code>blt rs1, rs2, label</code></td><td>rs1 &lt; rs2（符号付き）</td><td>Branch if Less Than</td></tr>
+      <tr><td><code>bge rs1, rs2, label</code></td><td>rs1 &ge; rs2（符号付き）</td><td>Branch if Greater or Equal</td></tr>
+      <tr><td><code>bltu rs1, rs2, label</code></td><td>rs1 &lt; rs2（符号なし）</td><td>Branch if Less Than Unsigned</td></tr>
+      <tr><td><code>bgeu rs1, rs2, label</code></td><td>rs1 &ge; rs2（符号なし）</td><td>Branch if Greater or Equal Unsigned</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>「ゼロと比較する」パターン：</strong><br>
+    RISC-V の <code>zero</code> レジスタ（常に 0）との比較で、ARM/x86 の「0 との CMP」と同等のことができます。<br>
+    <code>beq a0, zero, label</code> → a0 == 0 ならジャンプ（ARM の <code>CBZ</code>・x86 の <code>test eax,eax + je</code> 相当）<br>
+    <code>blt a0, zero, label</code> → a0 が負ならジャンプ（ARM の <code>BMI</code> 相当）
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="branch">4. フラグと条件分岐の関係</h2>
+
+  <p>ARM・x86 の条件分岐命令は、直前の演算/比較命令が残したフラグを読んで「ジャンプするかどうか」を決めます。</p>
+
+  <table class="cond-table">
+    <thead>
+      <tr><th>ARM</th><th>x86-64</th><th>条件（C言語的表現）</th><th>参照フラグ</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>BEQ</code></td><td><code>JE</code></td><td>a == b</td><td>Z=1</td></tr>
+      <tr><td><code>BNE</code></td><td><code>JNE</code></td><td>a != b</td><td>Z=0</td></tr>
+      <tr><td><code>BLT</code></td><td><code>JL</code></td><td>a &lt; b（符号付き）</td><td>N != V</td><td rowspan="0"></td></tr>
+      <tr><td><code>BLE</code></td><td><code>JLE</code></td><td>a &le; b（符号付き）</td><td>Z=1 または N != V</td></tr>
+      <tr><td><code>BGT</code></td><td><code>JG</code></td><td>a &gt; b（符号付き）</td><td>Z=0 かつ N == V</td></tr>
+      <tr><td><code>BGE</code></td><td><code>JGE</code></td><td>a &ge; b（符号付き）</td><td>N == V</td></tr>
+      <tr><td><code>BLO</code> / <code>BCC</code></td><td><code>JB</code></td><td>a &lt; b（符号なし）</td><td>C=0（ARM） / CF=1（x86）</td></tr>
+      <tr><td><code>BHS</code> / <code>BCS</code></td><td><code>JAE</code></td><td>a &ge; b（符号なし）</td><td>C=1（ARM） / CF=0（x86）</td></tr>
+      <tr><td><code>BMI</code></td><td><code>JS</code></td><td>結果が負</td><td>N=1 / SF=1</td></tr>
+      <tr><td><code>BPL</code></td><td><code>JNS</code></td><td>結果が正または 0</td><td>N=0 / SF=0</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>符号付き vs 符号なし比較の使い分け：</strong><br>
+    同じ「小さい」でも符号付き（<code>BLT</code>/<code>JL</code>）と符号なし（<code>BLO</code>/<code>JB</code>）では参照するフラグが異なります。
+    コンパイラは C の <code>int</code>（符号付き）には <code>BLT</code>/<code>JL</code> を、<code>unsigned int</code>（符号なし）には <code>BLO</code>/<code>JB</code> を使います。
+    アセンブラを読む際はどちらの比較が使われているか確認する習慣をつけると理解が深まります。
+  </div>
+
+  <footer>
+    AsmWalker ガイド
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/registers.html">← レジスタ一覧</a></span>
+      <a href="/about.html#guides" class="guide-nav-center">ガイド一覧</a>
+      <span class="guide-nav-side guide-nav-right"></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

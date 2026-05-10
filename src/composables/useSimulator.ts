@@ -1,12 +1,14 @@
 import { ref, computed, watch } from 'vue'
 import { i18n } from '@/i18n'
 import type { MachineState, Arch, PresetData } from '@/core/types'
-import { BASE_SP_ARM, BASE_PC_ARM, BASE_SP_X86, BASE_PC_X86, MAX_TRACE_STEPS, ARG_REGS } from '@/core/types'
+import { BASE_SP_ARM, BASE_PC_ARM, BASE_SP_X86, BASE_PC_X86, BASE_SP_RV32, BASE_PC_RV32, MAX_TRACE_STEPS, ARG_REGS } from '@/core/types'
 import { hexU32 } from '@/core/simulator'
 import { parseARM } from '@/core/arm/parser'
 import { traceProgram } from '@/core/arm/tracer'
 import { parseX86 } from '@/core/x86/parser'
 import { traceX86 } from '@/core/x86/tracer'
+import { parseRV32 } from '@/core/rv32/parser'
+import { traceRV32 } from '@/core/rv32/tracer'
 import { adaptGodboltResponse } from '@/core/compiler'
 import type { GodboltResponse } from '@/core/compiler'
 
@@ -36,6 +38,26 @@ const X86_INITIAL_STATE: MachineState = {
   flags: { zero: false, negative: false, carry: false, overflow: false },
   mode: 'thread',
   frames: [{ name: 'main', lo: BASE_SP_X86, hi: BASE_SP_X86, color: 'purple' }],
+}
+
+const RV32_INITIAL_STATE: MachineState = {
+  regs: {
+    zero: 0, ra: 0, sp: BASE_SP_RV32, gp: 0, tp: 0,
+    t0: 0, t1: 0, t2: 0,
+    s0: 0, s1: 0,
+    a0: 0, a1: 0, a2: 0, a3: 0, a4: 0, a5: 0, a6: 0, a7: 0,
+    s2: 0, s3: 0, s4: 0, s5: 0, s6: 0, s7: 0, s8: 0, s9: 0, s10: 0, s11: 0,
+    t3: 0, t4: 0, t5: 0, t6: 0,
+  },
+  sp: BASE_SP_RV32,
+  fp: 0,
+  lr: 0,
+  pc: BASE_PC_RV32,
+  stack: {},
+  stackMeta: {},
+  flags: { zero: false, negative: false, carry: false, overflow: false },
+  mode: 'thread',
+  frames: [{ name: 'main', lo: BASE_SP_RV32, hi: BASE_SP_RV32, color: 'purple' }],
 }
 
 // モジュールスコープのシングルトン: Vue の provide/inject や props を経由せず
@@ -149,13 +171,13 @@ function asmLineTextOf(step: typeof currentStepData.value): string {
  */
 const isReturnStep = computed(() => {
   if (!prevStepData.value) return false
-  const text = asmLineTextOf(prevStepData.value)
+  // ARM・RV32 インタープリタは ret 系命令で phase='ret' を明示的に設定するためそれを利用する。
+  // x86 インタープリタは phase='main'/'callee' のままのためテキストマッチで判定する。
   if (arch.value === 'x86') {
+    const text = asmLineTextOf(prevStepData.value)
     return text === 'ret' || text.startsWith('ret ')
   }
-  return (text.startsWith('bx') && text.includes('lr'))
-    || (text.startsWith('pop') && text.includes('pc'))
-    || (text.startsWith('ldm') && text.includes('pc'))
+  return prevStepData.value.phase === 'ret'
 })
 
 /**
@@ -178,7 +200,9 @@ const currentFuncName = computed(() => {
  *
  * @returns ARM なら 'r0'、x86 なら 'rax'
  */
-const returnReg = computed(() => arch.value === 'x86' ? 'rax' : 'r0')
+const returnReg = computed(() =>
+  arch.value === 'x86' ? 'rax' : arch.value === 'rv32' ? 'a0' : 'r0'
+)
 
 /**
  * 戻り値レジスタの現在値を返す。
@@ -190,7 +214,9 @@ const returnReg = computed(() => arch.value === 'x86' ? 'rax' : 'r0')
  */
 const returnVal = computed(() => {
   const regs = currentState.value.regs
-  return arch.value === 'x86' ? (regs['rax'] ?? 0) : (regs['r0'] ?? 0)
+  if (arch.value === 'x86') return regs['rax'] ?? 0
+  if (arch.value === 'rv32') return regs['a0'] ?? 0
+  return regs['r0'] ?? 0
 })
 
 /**
@@ -229,6 +255,14 @@ const callTarget = computed<string | null>(() => {
     // 関数名が不明なためバッジ表示をスキップする
     if (m[1].includes('[') || m[1].includes('ptr')) return null
     return m[1].split('(')[0] ?? null
+  }
+  if (arch.value === 'rv32') {
+    // `call label` / `jal ra, label` の2形式を検出
+    const mc = text.match(/^call\s+(\w+)/)
+    if (mc?.[1]) return mc[1]
+    const mj = text.match(/^jal\s+ra\s*,\s*(\w+)/)
+    if (mj?.[1]) return mj[1]
+    return null
   }
   const m = text.match(/^blx?\s+(\w+)/)
   if (!m || !m[1]) return null
@@ -309,7 +343,8 @@ function setArch(newArch: Arch) {
   arch.value = newArch
   preset.value = null
   currentStep.value = 0
-  states.value = [newArch === 'x86' ? X86_INITIAL_STATE : INITIAL_STATE]
+  const initState = newArch === 'x86' ? X86_INITIAL_STATE : newArch === 'rv32' ? RV32_INITIAL_STATE : INITIAL_STATE
+  states.value = [initState]
   compileError.value = null
   gccOutput.value = ''
   capturedCallDisplay.value = null
@@ -404,10 +439,11 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
       return
     }
 
-    // Godbolt のコンパイラ ID 命名規則に依存（例: "carm1121", "armug1320"）。
-    // x86 用コンパイラ（"cg142" 等）は 'arm' を含まないためこの判定が成立する。
-    const isArm = compilerId.includes('arm')
-    arch.value = isArm ? 'arm' : 'x86'
+    // Godbolt のコンパイラ ID 命名規則に依存
+    // rv32: "rv32-gcc1610" (-march=rv32gc) / arm: "carmug1520" など / x86: "cg142" など
+    const isRv32 = compilerId.includes('rv32')
+    const isArm = !isRv32 && compilerId.includes('arm')
+    arch.value = isRv32 ? 'rv32' : isArm ? 'arm' : 'x86'
     const cSourceLines = cSource.split('\n')
 
     const locale = i18n.global.locale.value === 'ja' ? 'ja' : 'en'
@@ -429,6 +465,24 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
         asmCode: result.asmLines,
         steps: result.steps,
         initialState: result.states[0] ?? INITIAL_STATE,
+      }
+    } else if (isRv32) {
+      const parseResult = parseRV32(output.asmText)
+      if (parseResult.errors.length > 0) {
+        compileError.value = parseResult.errors.map(e => `行${e.lineIndex + 1}: ${e.message}`).join('\n')
+        return
+      }
+      const result = traceRV32(parseResult, RV32_INITIAL_STATE, MAX_TRACE_STEPS, output.cLineMap, locale)
+      compileError.value = result.error ?? null
+      states.value = result.states
+      preset.value = {
+        id: 'compile',
+        name: 'Cコンパイル結果 (RV32)',
+        arch: 'rv32',
+        cCode: cSourceLines,
+        asmCode: result.asmLines,
+        steps: result.steps,
+        initialState: result.states[0] ?? RV32_INITIAL_STATE,
       }
     } else {
       const parseResult = parseX86(output.asmText)

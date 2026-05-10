@@ -5,7 +5,7 @@
       :key="a.value"
       @click="setArch(a.value)"
       :class="[
-        'px-4 py-2 rounded font-bold text-sm transition-colors',
+        'px-4 py-2 rounded font-bold text-sm transition-colors text-center',
         arch === a.value
           ? 'bg-blue-600 text-white'
           : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -23,7 +23,8 @@ import type { Arch } from '@/core/types'
 const { arch, setArch } = useSimulator()
 
 const archs: { value: Arch; label: string }[] = [
-  { value: 'x86', label: 'x86-64' },
   { value: 'arm', label: 'ARM Cortex-M' },
+  { value: 'x86', label: 'x86-64' },
+  { value: 'rv32', label: 'RISC-V' },
 ]
 </script>

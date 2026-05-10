@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register Reference — AsmWalker Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.88rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.45rem 0.7rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; font-size: 0.85rem; }
+    td code { font-size: 0.85em; }
+
+    tr.arg     { background: #e8f4e8; }
+    tr.ret     { background: #e8f0ff; }
+    tr.arg-ret { background: #d8f0d8; }
+    tr.saved   { background: #fafafa; }
+    tr.special { background: #fff8e1; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+
+    .arch-label {
+      display: inline-block;
+      padding: 0.15em 0.6em;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .arch-arm  { background: #ede7ff; color: #5c35b5; border: 1px solid #c4b0ff; }
+    .arch-x86  { background: #e0edff; color: #1a5fa8; border: 1px solid #a8c8ff; }
+    .arch-rv32 { background: #e2f5e8; color: #2a7a3b; border: 1px solid #8fd4a0; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin: 0.8rem 0 0.3rem;
+      font-size: 0.82rem;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.35rem; }
+    .legend-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #ccc; flex-shrink: 0; }
+    .swatch-arg    { background: #e8f4e8; }
+    .swatch-argret { background: #d8f0d8; }
+    .swatch-saved  { background: #fafafa; }
+    .swatch-special { background: #fff8e1; }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    .hint { font-size: 0.85rem; color: #666; margin: 0.3rem 0 1rem; }
+    .hint a { color: #0066cc; text-decoration: none; }
+    .hint a:hover { text-decoration: underline; }
+
+    .summary-table th { white-space: nowrap; }
+    .summary-table td:nth-child(2), .summary-table td:nth-child(3) { font-family: "SFMono-Regular", monospace; font-size: 0.82em; }
+
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+  <h1>Register Reference</h1>
+  <p><strong>Registers</strong> are the fastest storage locations a CPU can directly operate on. Every computation, memory access, and jump goes through registers. This page lists the registers for ARM, x86-64, and RISC-V RV32, together with their ABI roles.</p>
+
+  <div class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#arm">ARM Cortex-M Registers (r0–r15)</a></li>
+      <li><a href="#x86">x86-64 Registers (rax–r15)</a></li>
+      <li><a href="#rv32">RISC-V RV32 Registers (x0–x31)</a></li>
+      <li><a href="#caller-callee">Caller-saved vs Callee-saved</a></li>
+      <li><a href="#summary">Argument &amp; Return Register Summary</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="arm">1. ARM Cortex-M Registers (r0–r15)</h2>
+
+  <span class="arch-label arch-arm">ARM Cortex-M / AAPCS</span>
+
+  <p>ARM has 16 general-purpose 32-bit registers (r0–r15). Registers r13–r15 are dedicated to fixed special purposes.</p>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch swatch-argret"></div>Argument &amp; Return</div>
+    <div class="legend-item"><div class="legend-swatch swatch-arg"></div>Argument</div>
+    <div class="legend-item"><div class="legend-swatch swatch-special"></div>Special purpose</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Register</th><th>ABI name</th><th>Role</th><th>Value after call</th></tr>
+    </thead>
+    <tbody>
+      <tr class="arg-ret"><td><code>r0</code></td><td>a1</td><td>General / 1st argument / return value</td><td>May change</td></tr>
+      <tr class="arg"><td><code>r1</code></td><td>a2</td><td>General / 2nd argument / upper half of 64-bit return</td><td>May change</td></tr>
+      <tr class="arg"><td><code>r2</code></td><td>a3</td><td>General / 3rd argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>r3</code></td><td>a4</td><td>General / 4th argument</td><td>May change</td></tr>
+      <tr class="saved"><td><code>r4</code></td><td>v1</td><td>General</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r5</code></td><td>v2</td><td>General</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r6</code></td><td>v3</td><td>General</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r7</code></td><td>v4 / FP</td><td>Frame pointer in Thumb mode (GCC convention, not ABI-mandated)</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r8</code></td><td>v5</td><td>General</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r9</code></td><td>v6 / SB</td><td>General / static base (PIC)</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r10</code></td><td>v7</td><td>General</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r11</code></td><td>v8 / FP</td><td>Frame pointer in ARM mode (GCC convention, not ABI-mandated)</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r12</code></td><td>IP</td><td>Intra-procedure-call scratch</td><td>May change</td></tr>
+      <tr class="special"><td><code>r13</code></td><td>SP</td><td>Stack pointer</td><td>—</td></tr>
+      <tr class="special"><td><code>r14</code></td><td>LR</td><td>Link register (return address)</td><td>—</td></tr>
+      <tr class="special"><td><code>r15</code></td><td>PC</td><td>Program counter (address of the next instruction)</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <p class="hint">See <a href="#caller-callee">Section 4 "Caller-saved vs Callee-saved"</a> for details on "May change" and "Preserved".</p>
+
+  <div class="key">
+    <strong>Thumb mode and the frame pointer:</strong><br>
+    Cortex-M uses the Thumb instruction set. Because Thumb-2 two-register instructions (like <code>push</code>/<code>pop</code>) have limited access to r8 and above,
+    GCC uses <code>r7</code> as the frame pointer with <code>-mthumb</code>, and <code>r11</code> in ARM mode.
+    AsmWalker samples compile in Thumb mode, so you will see <code>r7</code> used as FP.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    Compile the Function Call sample and step to the <code>bl</code> instruction.
+    You will see argument badges on <code>r0</code>–<code>r3</code> showing the values being passed.
+    At the <code>bx lr</code> / <code>pop {pc}</code> step, a "return" badge appears on <code>r0</code>.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="x86">2. x86-64 Registers (rax–r15)</h2>
+
+  <span class="arch-label arch-x86">x86-64 / System V AMD64 ABI</span>
+
+  <p>x86-64 has 16 general-purpose 64-bit registers. For historical reasons, each register has 32-bit, 16-bit, and 8-bit sub-names.</p>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch swatch-argret"></div>Argument &amp; Return</div>
+    <div class="legend-item"><div class="legend-swatch swatch-arg"></div>Argument</div>
+    <div class="legend-item"><div class="legend-swatch swatch-special"></div>Special purpose</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>64-bit</th><th>32-bit</th><th>16-bit</th><th>8-bit</th><th>Role</th><th>Value after call</th></tr>
+    </thead>
+    <tbody>
+      <tr class="arg-ret"><td><code>rax</code></td><td><code>eax</code></td><td><code>ax</code></td><td><code>al</code></td><td>General / return value</td><td>May change</td></tr>
+      <tr class="saved"><td><code>rbx</code></td><td><code>ebx</code></td><td><code>bx</code></td><td><code>bl</code></td><td>General</td><td>Preserved</td></tr>
+      <tr class="arg"><td><code>rcx</code></td><td><code>ecx</code></td><td><code>cx</code></td><td><code>cl</code></td><td>General / 4th argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>rdx</code></td><td><code>edx</code></td><td><code>dx</code></td><td><code>dl</code></td><td>General / 3rd argument / upper half of 128-bit return</td><td>May change</td></tr>
+      <tr class="arg"><td><code>rsi</code></td><td><code>esi</code></td><td><code>si</code></td><td><code>sil</code></td><td>General / 2nd argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>rdi</code></td><td><code>edi</code></td><td><code>di</code></td><td><code>dil</code></td><td>General / 1st argument</td><td>May change</td></tr>
+      <tr class="saved"><td><code>rbp</code></td><td><code>ebp</code></td><td><code>bp</code></td><td><code>bpl</code></td><td>Frame pointer (GCC convention, not ABI-mandated)</td><td>Preserved</td></tr>
+      <tr class="special"><td><code>rsp</code></td><td><code>esp</code></td><td><code>sp</code></td><td><code>spl</code></td><td>Stack pointer</td><td>—</td></tr>
+      <tr class="arg"><td><code>r8</code></td><td><code>r8d</code></td><td><code>r8w</code></td><td><code>r8b</code></td><td>5th argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>r9</code></td><td><code>r9d</code></td><td><code>r9w</code></td><td><code>r9b</code></td><td>6th argument</td><td>May change</td></tr>
+      <tr class="saved"><td><code>r10</code></td><td><code>r10d</code></td><td><code>r10w</code></td><td><code>r10b</code></td><td>General</td><td>May change</td></tr>
+      <tr class="saved"><td><code>r11</code></td><td><code>r11d</code></td><td><code>r11w</code></td><td><code>r11b</code></td><td>General</td><td>May change</td></tr>
+      <tr class="saved"><td><code>r12</code></td><td><code>r12d</code></td><td><code>r12w</code></td><td><code>r12b</code></td><td>General</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r13</code></td><td><code>r13d</code></td><td><code>r13w</code></td><td><code>r13b</code></td><td>General</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r14</code></td><td><code>r14d</code></td><td><code>r14w</code></td><td><code>r14b</code></td><td>General</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>r15</code></td><td><code>r15d</code></td><td><code>r15w</code></td><td><code>r15b</code></td><td>General</td><td>Preserved</td></tr>
+    </tbody>
+  </table>
+
+  <p class="hint">See <a href="#caller-callee">Section 4 "Caller-saved vs Callee-saved"</a> for details on "May change" and "Preserved".</p>
+
+  <div class="key">
+    <strong>Writing the 32-bit name zeros the upper 32 bits automatically:</strong><br>
+    When passing an <code>int</code> (32-bit) argument, GCC uses <code>edi</code> rather than <code>rdi</code>.
+    The x86-64 specification guarantees that writing to <code>edi</code> clears the upper 32 bits of <code>rdi</code>,
+    so the effect is identical to writing the full 64-bit register.
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    Compile an x86 sample and step to the <code>call</code> instruction.
+    Argument badges will appear on <code>rdi</code>, <code>rsi</code>, <code>rdx</code>, etc.
+    At the <code>ret</code> step, a "return" badge appears on <code>rax</code> (or <code>eax</code>).
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="rv32">3. RISC-V RV32 Registers (x0–x31)</h2>
+
+  <span class="arch-label arch-rv32">RISC-V RV32 / RISC-V ABI</span>
+
+  <p>RISC-V has 32 general-purpose 32-bit registers (x0–x31), each with an ABI name. Assembly code normally uses ABI names. <code>x0</code> is hardwired to zero — writes to it are silently discarded.</p>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch swatch-argret"></div>Argument &amp; Return</div>
+    <div class="legend-item"><div class="legend-swatch swatch-arg"></div>Argument</div>
+    <div class="legend-item"><div class="legend-swatch swatch-special"></div>Special purpose</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Register</th><th>ABI name</th><th>Role</th><th>Value after call</th></tr>
+    </thead>
+    <tbody>
+      <tr class="special"><td><code>x0</code></td><td><code>zero</code></td><td>Always 0 (hardwired)</td><td>—</td></tr>
+      <tr class="special"><td><code>x1</code></td><td><code>ra</code></td><td>Return address</td><td>May change</td></tr>
+      <tr class="special"><td><code>x2</code></td><td><code>sp</code></td><td>Stack pointer</td><td>Preserved</td></tr>
+      <tr class="special"><td><code>x3</code></td><td><code>gp</code></td><td>Global pointer</td><td>—</td></tr>
+      <tr class="special"><td><code>x4</code></td><td><code>tp</code></td><td>Thread pointer</td><td>—</td></tr>
+      <tr><td><code>x5</code></td><td><code>t0</code></td><td>Temporary / alternate link register</td><td>May change</td></tr>
+      <tr><td><code>x6</code></td><td><code>t1</code></td><td>Temporary</td><td>May change</td></tr>
+      <tr><td><code>x7</code></td><td><code>t2</code></td><td>Temporary</td><td>May change</td></tr>
+      <tr class="saved"><td><code>x8</code></td><td><code>s0</code> / <code>fp</code></td><td>Saved / frame pointer (GCC convention, not ABI-mandated)</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x9</code></td><td><code>s1</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="arg-ret"><td><code>x10</code></td><td><code>a0</code></td><td>General / 1st argument / return value</td><td>May change</td></tr>
+      <tr class="arg"><td><code>x11</code></td><td><code>a1</code></td><td>General / 2nd argument / upper half of 64-bit return</td><td>May change</td></tr>
+      <tr class="arg"><td><code>x12</code></td><td><code>a2</code></td><td>General / 3rd argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>x13</code></td><td><code>a3</code></td><td>General / 4th argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>x14</code></td><td><code>a4</code></td><td>General / 5th argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>x15</code></td><td><code>a5</code></td><td>General / 6th argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>x16</code></td><td><code>a6</code></td><td>General / 7th argument</td><td>May change</td></tr>
+      <tr class="arg"><td><code>x17</code></td><td><code>a7</code></td><td>General / 8th argument</td><td>May change</td></tr>
+      <tr class="saved"><td><code>x18</code></td><td><code>s2</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x19</code></td><td><code>s3</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x20</code></td><td><code>s4</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x21</code></td><td><code>s5</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x22</code></td><td><code>s6</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x23</code></td><td><code>s7</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x24</code></td><td><code>s8</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x25</code></td><td><code>s9</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x26</code></td><td><code>s10</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr class="saved"><td><code>x27</code></td><td><code>s11</code></td><td>Saved register</td><td>Preserved</td></tr>
+      <tr><td><code>x28</code></td><td><code>t3</code></td><td>Temporary</td><td>May change</td></tr>
+      <tr><td><code>x29</code></td><td><code>t4</code></td><td>Temporary</td><td>May change</td></tr>
+      <tr><td><code>x30</code></td><td><code>t5</code></td><td>Temporary</td><td>May change</td></tr>
+      <tr><td><code>x31</code></td><td><code>t6</code></td><td>Temporary</td><td>May change</td></tr>
+    </tbody>
+  </table>
+
+  <p class="hint">See <a href="#caller-callee">Section 4 "Caller-saved vs Callee-saved"</a> for details on "May change" and "Preserved".</p>
+
+  <div class="key">
+    <strong>How the <code>zero</code> register (x0) is used:</strong><br>
+    Having a dedicated always-zero register lets many pseudo-instructions be expressed simply.<br>
+    e.g. <code>mv a0, a1</code> → actually <code>addi a0, a1, 0</code> (a1 + 0 into a0)<br>
+    e.g. <code>j label</code> → actually <code>jal zero, label</code> (jump, discarding the return address)<br>
+    e.g. <code>ret</code> → actually <code>jalr zero, ra, 0</code> (jump to ra, discarding the return address)
+  </div>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    Compile a RISC-V sample and watch the Register panel — registers are displayed as <code>a0(x10)</code>,
+    showing both the ABI name and hardware number side by side.
+    At the <code>call</code> step, argument badges appear on <code>a0</code>–<code>a7</code>;
+    at the <code>ret</code> step, a "return" badge appears on <code>a0</code>.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="caller-callee">4. Caller-saved vs Callee-saved</h2>
+
+  <p>The ABI defines which side — the <strong>caller</strong> (the function making the call) or the <strong>callee</strong> (the function being called) — is responsible for preserving a register's value across a call.</p>
+
+  <table>
+    <thead>
+      <tr><th>Category</th><th>Who saves it</th><th>Meaning</th><th>Examples</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Caller-saved</strong></td>
+        <td>Caller saves <strong>before</strong> the call</td>
+        <td>The callee may freely overwrite these. If the caller needs the value after the call, it must spill it to the stack first.</td>
+        <td>ARM: r0–r3, r12<br>x86: rdi, rsi, rax<br>RV32: a0–a7, t0–t6</td>
+      </tr>
+      <tr>
+        <td><strong>Callee-saved</strong></td>
+        <td>Callee saves <strong>inside</strong> the function</td>
+        <td>The callee must spill these to the stack at the start and restore them before returning.</td>
+        <td>ARM: r4–r11<br>x86: rbx, rbp, r12–r15<br>RV32: s0–s11, sp</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The compiler generates code that follows these rules, so you can reason about whether a register is safe to read after a function call. When reading assembly, ask "could this call have changed this register?"</p>
+
+  <pre><code><span class="comment">; ARM example: function that uses callee-saved register r4</span>
+example:
+    push {r4, lr}     <span class="comment">; callee saves r4 and LR at the top</span>
+    mov  r4, r0       <span class="comment">; keep the argument in r4 across inner calls</span>
+    ...
+    pop  {r4, pc}     <span class="comment">; restore r4 and return (caller's r4 is untouched)</span></code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="summary">5. Argument &amp; Return Register Summary</h2>
+
+  <table class="summary-table">
+    <thead>
+      <tr><th>Architecture</th><th>Arguments (1st–Nth)</th><th>Integer return</th><th>Max register args</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="arch-label arch-arm">ARM / AAPCS</span></td>
+        <td><code>r0, r1, r2, r3</code></td>
+        <td><code>r0</code> (64-bit: r0:r1)</td>
+        <td>4</td>
+      </tr>
+      <tr>
+        <td><span class="arch-label arch-x86">x86-64 / SysV</span></td>
+        <td><code>rdi, rsi, rdx, rcx, r8, r9</code></td>
+        <td><code>rax</code> (128-bit: rax:rdx)</td>
+        <td>6</td>
+      </tr>
+      <tr>
+        <td><span class="arch-label arch-rv32">RISC-V RV32</span></td>
+        <td><code>a0, a1, a2, a3, a4, a5, a6, a7</code></td>
+        <td><code>a0</code> (64-bit: a0:a1)</td>
+        <td>8</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>Arguments beyond the maximum register count are passed on the stack. AsmWalker samples compiled with <code>-O0</code> use few arguments, so everything is passed in registers.</p>
+
+  <footer>
+    AsmWalker Guide
+    <nav class="guide-nav">
+      <span class="guide-nav-side"></span>
+      <a href="/about.en.html#guides" class="guide-nav-center">Guide Index</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/en/flags.html">Flag Registers →</a></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

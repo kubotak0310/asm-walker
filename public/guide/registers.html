@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>レジスタ一覧 — AsmWalker ガイド</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.88rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.45rem 0.7rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; font-size: 0.85rem; }
+    td code { font-size: 0.85em; }
+
+    /* 行の色分け */
+    tr.arg  { background: #e8f4e8; }
+    tr.ret  { background: #e8f0ff; }
+    tr.arg-ret { background: #d8f0d8; }
+    tr.saved { background: #fafafa; }
+    tr.special { background: #fff8e1; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+
+    .arch-label {
+      display: inline-block;
+      padding: 0.15em 0.6em;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .arch-arm  { background: #ede7ff; color: #5c35b5; border: 1px solid #c4b0ff; }
+    .arch-x86  { background: #e0edff; color: #1a5fa8; border: 1px solid #a8c8ff; }
+    .arch-rv32 { background: #e2f5e8; color: #2a7a3b; border: 1px solid #8fd4a0; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin: 0.8rem 0 0.3rem;
+      font-size: 0.82rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+      flex-shrink: 0;
+    }
+    .swatch-arg    { background: #e8f4e8; }
+    .swatch-argret { background: #d8f0d8; }
+    .swatch-saved  { background: #fafafa; }
+    .swatch-special { background: #fff8e1; }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    .hint { font-size: 0.85rem; color: #666; margin: 0.3rem 0 1rem; }
+    .hint a { color: #0066cc; text-decoration: none; }
+    .hint a:hover { text-decoration: underline; }
+
+    .summary-table th { white-space: nowrap; }
+    .summary-table td:nth-child(2), .summary-table td:nth-child(3) { font-family: "SFMono-Regular", monospace; font-size: 0.82em; }
+
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+  <h1>レジスタ一覧</h1>
+  <p>CPU が直接操作できる超高速な記憶場所を <strong>レジスタ</strong> と呼びます。すべての計算・メモリアクセス・ジャンプはレジスタを経由して行われます。このページでは ARM・x86-64・RISC-V RV32 のレジスタをABI用途とともに一覧します。</p>
+
+  <div class="toc">
+    <h4>目次</h4>
+    <ol>
+      <li><a href="#arm">ARM Cortex-M レジスタ（r0〜r15）</a></li>
+      <li><a href="#x86">x86-64 レジスタ（rax〜r15）</a></li>
+      <li><a href="#rv32">RISC-V RV32 レジスタ（x0〜x31）</a></li>
+      <li><a href="#caller-callee">Caller-saved と Callee-saved</a></li>
+      <li><a href="#summary">引数・戻り値レジスタのまとめ</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="arm">1. ARM Cortex-M レジスタ（r0〜r15）</h2>
+
+  <span class="arch-label arch-arm">ARM Cortex-M / AAPCS</span>
+
+  <p>ARM は 32bit 汎用レジスタを 16 本（r0〜r15）持ちます。r13〜r15 は特殊用途に固定されています。</p>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch swatch-argret"></div>引数 &amp; 戻り値</div>
+    <div class="legend-item"><div class="legend-swatch swatch-arg"></div>引数</div>
+    <div class="legend-item"><div class="legend-swatch swatch-special"></div>特殊用途</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>レジスタ</th><th>ABI 別名</th><th>用途</th><th>呼び出し後の値</th></tr>
+    </thead>
+    <tbody>
+      <tr class="arg-ret"><td><code>r0</code></td><td>a1</td><td>汎用 / 第1引数 / 戻り値</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>r1</code></td><td>a2</td><td>汎用 / 第2引数 / 戻り値上位（64bit 値を返す場合）</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>r2</code></td><td>a3</td><td>汎用 / 第3引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>r3</code></td><td>a4</td><td>汎用 / 第4引数</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>r4</code></td><td>v1</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r5</code></td><td>v2</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r6</code></td><td>v3</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r7</code></td><td>v4 / FP</td><td>フレームポインタ（Thumb モード、ABI必須ではなくGCCの実装）</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r8</code></td><td>v5</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r9</code></td><td>v6 / SB</td><td>汎用 / 静的ベースポインタ（PIC）</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r10</code></td><td>v7</td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r11</code></td><td>v8 / FP</td><td>フレームポインタ（ARM モード、ABI必須ではなくGCCの実装）</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r12</code></td><td>IP</td><td>イントラプロシージャ呼び出し用スクラッチ</td><td>変わる可能性あり</td></tr>
+      <tr class="special"><td><code>r13</code></td><td>SP</td><td>スタックポインタ</td><td>—</td></tr>
+      <tr class="special"><td><code>r14</code></td><td>LR</td><td>リンクレジスタ（戻り先アドレス）</td><td>—</td></tr>
+      <tr class="special"><td><code>r15</code></td><td>PC</td><td>プログラムカウンタ（次に実行する命令のアドレス）</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <p class="hint">※「変わる可能性あり」「保持される」の詳細は <a href="#caller-callee">4章「Caller-saved と Callee-saved」</a>を参照してください。</p>
+
+  <div class="key">
+    <strong>Thumb モードと FP の位置：</strong><br>
+    Cortex-M は Thumb 命令セットを使います。Thumb-2 の 2レジスタ命令（<code>push</code>/<code>pop</code>）では r8 以上が使いにくいため、
+    GCC は <code>-mthumb</code> 時にフレームポインタとして <code>r7</code> を、ARM モードでは <code>r11</code> を使います。
+    AsmWalker のサンプルは Thumb モードでコンパイルするため <code>r7</code> が FP として現れます。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    関数呼び出しサンプルをコンパイルし <code>bl</code> 命令のステップまで進めると、
+    <code>r0</code>〜<code>r3</code> に引数値がセットされた状態でバッジが表示されます。
+    <code>bx lr</code> / <code>pop {pc}</code> ステップでは <code>r0</code> に「戻り値」バッジが表示されます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="x86">2. x86-64 レジスタ（rax〜r15）</h2>
+
+  <span class="arch-label arch-x86">x86-64 / System V AMD64 ABI</span>
+
+  <p>x86-64 は 64bit 汎用レジスタを 16 本持ちます。歴史的経緯から各レジスタに 32bit / 16bit / 8bit の「部分名」があります。</p>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch swatch-argret"></div>引数 &amp; 戻り値</div>
+    <div class="legend-item"><div class="legend-swatch swatch-arg"></div>引数</div>
+    <div class="legend-item"><div class="legend-swatch swatch-special"></div>特殊用途</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>64bit</th><th>32bit</th><th>16bit</th><th>8bit</th><th>用途</th><th>呼び出し後の値</th></tr>
+    </thead>
+    <tbody>
+      <tr class="arg-ret"><td><code>rax</code></td><td><code>eax</code></td><td><code>ax</code></td><td><code>al</code></td><td>汎用 / 戻り値</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>rbx</code></td><td><code>ebx</code></td><td><code>bx</code></td><td><code>bl</code></td><td>汎用</td><td>保持される</td></tr>
+      <tr class="arg"><td><code>rcx</code></td><td><code>ecx</code></td><td><code>cx</code></td><td><code>cl</code></td><td>汎用 / 第4引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>rdx</code></td><td><code>edx</code></td><td><code>dx</code></td><td><code>dl</code></td><td>汎用 / 第3引数 / 戻り値上位（128bit 値を返す場合）</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>rsi</code></td><td><code>esi</code></td><td><code>si</code></td><td><code>sil</code></td><td>汎用 / 第2引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>rdi</code></td><td><code>edi</code></td><td><code>di</code></td><td><code>dil</code></td><td>汎用 / 第1引数</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>rbp</code></td><td><code>ebp</code></td><td><code>bp</code></td><td><code>bpl</code></td><td>フレームポインタ（ABI必須ではなくGCCの実装）</td><td>保持される</td></tr>
+      <tr class="special"><td><code>rsp</code></td><td><code>esp</code></td><td><code>sp</code></td><td><code>spl</code></td><td>スタックポインタ</td><td>—</td></tr>
+      <tr class="arg"><td><code>r8</code></td><td><code>r8d</code></td><td><code>r8w</code></td><td><code>r8b</code></td><td>第5引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>r9</code></td><td><code>r9d</code></td><td><code>r9w</code></td><td><code>r9b</code></td><td>第6引数</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>r10</code></td><td><code>r10d</code></td><td><code>r10w</code></td><td><code>r10b</code></td><td>汎用</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>r11</code></td><td><code>r11d</code></td><td><code>r11w</code></td><td><code>r11b</code></td><td>汎用</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>r12</code></td><td><code>r12d</code></td><td><code>r12w</code></td><td><code>r12b</code></td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r13</code></td><td><code>r13d</code></td><td><code>r13w</code></td><td><code>r13b</code></td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r14</code></td><td><code>r14d</code></td><td><code>r14w</code></td><td><code>r14b</code></td><td>汎用</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>r15</code></td><td><code>r15d</code></td><td><code>r15w</code></td><td><code>r15b</code></td><td>汎用</td><td>保持される</td></tr>
+    </tbody>
+  </table>
+
+  <p class="hint">※「変わる可能性あり」「保持される」の詳細は <a href="#caller-callee">4章「Caller-saved と Callee-saved」</a>を参照してください。</p>
+
+  <div class="key">
+    <strong>32bit 名で書くと上位32bitが自動ゼロになる：</strong><br>
+    <code>int</code>（32bit）の引数を渡すとき、GCC は <code>rdi</code> ではなく <code>edi</code> を使います。
+    x86-64 の仕様で、<code>edi</code> に書き込むと <code>rdi</code> の上位32bitが自動的に 0 になるため、
+    動作は <code>rdi</code> への書き込みと等価です。
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    x86 サンプルをコンパイルし <code>call</code> 命令のステップまで進めると、
+    <code>rdi</code>/<code>rsi</code>/<code>rdx</code> などに引数値がセットされた状態でバッジが表示されます。
+    <code>ret</code> ステップでは <code>rax</code>（または <code>eax</code>）に「戻り値」バッジが表示されます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="rv32">3. RISC-V RV32 レジスタ（x0〜x31）</h2>
+
+  <span class="arch-label arch-rv32">RISC-V RV32 / RISC-V ABI</span>
+
+  <p>RISC-V は 32bit 汎用レジスタを 32 本（x0〜x31）持ちます。それぞれに ABI 名（別名）があり、アセンブラでは通常 ABI 名で記述します。<code>x0</code> は常に 0 で、書き込みは無視されます。</p>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-swatch swatch-argret"></div>引数 &amp; 戻り値</div>
+    <div class="legend-item"><div class="legend-swatch swatch-arg"></div>引数</div>
+    <div class="legend-item"><div class="legend-swatch swatch-special"></div>特殊用途</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>レジスタ番号</th><th>ABI 名</th><th>用途</th><th>呼び出し後の値</th></tr>
+    </thead>
+    <tbody>
+      <tr class="special"><td><code>x0</code></td><td><code>zero</code></td><td>常に 0（ハードウェアで固定）</td><td>—</td></tr>
+      <tr class="special"><td><code>x1</code></td><td><code>ra</code></td><td>戻り先アドレス（Return Address）</td><td>変わる可能性あり</td></tr>
+      <tr class="special"><td><code>x2</code></td><td><code>sp</code></td><td>スタックポインタ</td><td>保持される</td></tr>
+      <tr class="special"><td><code>x3</code></td><td><code>gp</code></td><td>グローバルポインタ</td><td>—</td></tr>
+      <tr class="special"><td><code>x4</code></td><td><code>tp</code></td><td>スレッドポインタ</td><td>—</td></tr>
+      <tr><td><code>x5</code></td><td><code>t0</code></td><td>一時レジスタ / 代替リンクレジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x6</code></td><td><code>t1</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x7</code></td><td><code>t2</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>x8</code></td><td><code>s0</code> / <code>fp</code></td><td>保存レジスタ / フレームポインタ（ABI必須ではなくGCCの実装）</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x9</code></td><td><code>s1</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="arg-ret"><td><code>x10</code></td><td><code>a0</code></td><td>汎用 / 第1引数 / 戻り値</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x11</code></td><td><code>a1</code></td><td>汎用 / 第2引数 / 戻り値上位（64bit 値を返す場合）</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x12</code></td><td><code>a2</code></td><td>汎用 / 第3引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x13</code></td><td><code>a3</code></td><td>汎用 / 第4引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x14</code></td><td><code>a4</code></td><td>汎用 / 第5引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x15</code></td><td><code>a5</code></td><td>汎用 / 第6引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x16</code></td><td><code>a6</code></td><td>汎用 / 第7引数</td><td>変わる可能性あり</td></tr>
+      <tr class="arg"><td><code>x17</code></td><td><code>a7</code></td><td>汎用 / 第8引数</td><td>変わる可能性あり</td></tr>
+      <tr class="saved"><td><code>x18</code></td><td><code>s2</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x19</code></td><td><code>s3</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x20</code></td><td><code>s4</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x21</code></td><td><code>s5</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x22</code></td><td><code>s6</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x23</code></td><td><code>s7</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x24</code></td><td><code>s8</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x25</code></td><td><code>s9</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x26</code></td><td><code>s10</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr class="saved"><td><code>x27</code></td><td><code>s11</code></td><td>保存レジスタ</td><td>保持される</td></tr>
+      <tr><td><code>x28</code></td><td><code>t3</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x29</code></td><td><code>t4</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x30</code></td><td><code>t5</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+      <tr><td><code>x31</code></td><td><code>t6</code></td><td>一時レジスタ</td><td>変わる可能性あり</td></tr>
+    </tbody>
+  </table>
+
+  <p class="hint">※「変わる可能性あり」「保持される」の詳細は <a href="#caller-callee">4章「Caller-saved と Callee-saved」</a>を参照してください。</p>
+
+  <div class="key">
+    <strong><code>zero</code> レジスタ（x0）の活用：</strong><br>
+    常に 0 を返す専用レジスタを持つことで、多くの疑似命令をシンプルに実現できます。<br>
+    例：<code>mv a0, a1</code> → 実際は <code>addi a0, a1, 0</code>（a1 + 0 を a0 へ）<br>
+    例：<code>j label</code> → 実際は <code>jal zero, label</code>（戻り先を捨てて無条件ジャンプ）<br>
+    例：<code>ret</code> → 実際は <code>jalr zero, ra, 0</code>（ra にジャンプし戻り先を捨てる）
+  </div>
+
+  <div class="note">
+    <strong>AsmWalker での確認：</strong><br>
+    RISC-V サンプルをコンパイルすると、汎用レジスタパネルに <code>a0(x10)</code> のように ABI 名と番号が並んで表示されます。
+    <code>call</code> 命令ステップでは <code>a0</code>〜<code>a7</code> に引数バッジが、<code>ret</code> ステップでは <code>a0</code> に戻り値バッジが表示されます。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="caller-callee">4. Caller-saved と Callee-saved</h2>
+
+  <p>関数を呼び出す側（<strong>Caller</strong>）と呼び出される側（<strong>Callee</strong>）の間で、レジスタ値の「保護義務」を決めたルールです。</p>
+
+  <table>
+    <thead>
+      <tr><th>種別</th><th>誰が保存する</th><th>意味</th><th>代表例</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Caller-saved</strong><br>（呼び出し側保存）</td>
+        <td>関数を<strong>呼ぶ前</strong>に Caller が待避</td>
+        <td>Callee は自由に上書きしてよい。呼び出し後も値が必要なら Caller がスタックに退避しておく。</td>
+        <td>ARM: r0〜r3, r12<br>x86: rdi, rsi, rax<br>RV32: a0〜a7, t0〜t6</td>
+      </tr>
+      <tr>
+        <td><strong>Callee-saved</strong><br>（呼び出され側保存）</td>
+        <td>関数<strong>内部で</strong> Callee が退避・復元</td>
+        <td>Callee は使う前にスタックへ退避し、return 前に必ず復元しなければならない。</td>
+        <td>ARM: r4〜r11<br>x86: rbx, rbp, r12〜r15<br>RV32: s0〜s11, sp</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>コンパイラはこのルールに従ってコードを生成するため、呼び出し前後でレジスタ値が維持されるか否かが保証されます。アセンブラを読む際は「この命令実行後、このレジスタは変わるか？」を確認するのに役立ちます。</p>
+
+  <pre><code><span class="comment">; ARM の例: Callee-saved レジスタ r4 を使う関数</span>
+example:
+    push {r4, lr}     <span class="comment">; ← Callee が先頭で退避（r4 と戻り先 LR を保存）</span>
+    mov  r4, r0       <span class="comment">; r4 に引数を保存して使いまわす</span>
+    ...
+    pop  {r4, pc}     <span class="comment">; ← return 前に復元（呼び出し元の r4 が壊れない）+ 関数復帰</span></code></pre>
+
+  <!-- ============================================================ -->
+  <h2 id="summary">5. 引数・戻り値レジスタのまとめ</h2>
+
+  <table class="summary-table">
+    <thead>
+      <tr><th>アーキテクチャ</th><th>第1〜第N引数</th><th>整数の戻り値</th><th>最大レジスタ引数数</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="arch-label arch-arm">ARM / AAPCS</span></td>
+        <td><code>r0, r1, r2, r3</code></td>
+        <td><code>r0</code>（64bit は r0:r1）</td>
+        <td>4</td>
+      </tr>
+      <tr>
+        <td><span class="arch-label arch-x86">x86-64 / SysV</span></td>
+        <td><code>rdi, rsi, rdx, rcx, r8, r9</code></td>
+        <td><code>rax</code>（128bit は rax:rdx）</td>
+        <td>6</td>
+      </tr>
+      <tr>
+        <td><span class="arch-label arch-rv32">RISC-V RV32</span></td>
+        <td><code>a0, a1, a2, a3, a4, a5, a6, a7</code></td>
+        <td><code>a0</code>（64bit は a0:a1）</td>
+        <td>8</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>最大引数数を超えた引数はスタック経由で渡されます。<code>-O0</code> でコンパイルした AsmWalker のサンプルは引数が少ないため、すべてレジスタで渡されます。</p>
+
+  <footer>
+    AsmWalker ガイド
+    <nav class="guide-nav">
+      <span class="guide-nav-side"></span>
+      <a href="/about.html#guides" class="guide-nav-center">ガイド一覧</a>
+      <span class="guide-nav-side guide-nav-right"><a href="/guide/flags.html">フラグレジスタ →</a></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

@@ -7,7 +7,7 @@
       <template v-if="compileBarState.type === 'call'">
         <span class="text-blue-400 text-xs font-bold shrink-0">→ {{ compileBarState.display }}</span>
         <span class="text-blue-300 text-xs">{{ $t('cCompilePanel.calling') }}</span>
-        <span class="text-gray-300 text-xs hidden lg:inline">{{ arch === 'x86' ? $t('cCompilePanel.abiArgX86') : $t('cCompilePanel.abiArgArm') }}</span>
+        <span class="text-gray-300 text-xs hidden lg:inline">{{ arch === 'x86' ? $t('cCompilePanel.abiArgX86') : arch === 'rv32' ? $t('cCompilePanel.abiArgRv32') : $t('cCompilePanel.abiArgArm') }}</span>
       </template>
       <!-- ② return命令: 実行完了 + 戻り値 -->
       <template v-else-if="compileBarState.type === 'return'">
@@ -16,7 +16,7 @@
         <span class="text-gray-300 text-xs">{{ $t('cCompilePanel.returnValue') }}</span>
         <span class="text-yellow-200 text-xs font-bold font-mono">{{ compileBarState.reg }} = {{ compileBarState.hex }}</span>
         <span class="text-gray-300 text-xs">({{ compileBarState.dec }})</span>
-        <span class="text-gray-300 text-xs hidden lg:inline">{{ arch === 'x86' ? $t('cCompilePanel.abiRetX86') : $t('cCompilePanel.abiRetArm') }}</span>
+        <span class="text-gray-300 text-xs hidden lg:inline">{{ arch === 'x86' ? $t('cCompilePanel.abiRetX86') : arch === 'rv32' ? $t('cCompilePanel.abiRetRv32') : $t('cCompilePanel.abiRetArm') }}</span>
       </template>
       <!-- ③ 関数内実行中 -->
       <template v-else-if="compileBarState.type === 'running'">
@@ -94,7 +94,7 @@
             <span>{{ isCompiling ? $t('cCompilePanel.compiling') : $t('cCompilePanel.compileBtn') }}</span>
           </button>
           <span v-if="!isCompiling && !errors.length" class="text-gray-500 text-xs font-mono">
-            {{ arch === 'arm' ? 'ARM' : 'x86-64' }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}
+            {{ arch === 'arm' ? 'ARM' : arch === 'rv32' ? 'RISC-V RV32' : 'x86-64' }} / {{ optLevel }}{{ extraFlags ? ' ' + extraFlags : '' }}
           </span>
         </div>
         <div v-if="gccOutput" class="rounded overflow-hidden border border-gray-600">
@@ -121,6 +121,7 @@ import { tags } from '@lezer/highlight'
 import { useSimulator } from '@/composables/useSimulator'
 import { SAMPLES } from '@/samples'
 import type { SampleDef } from '@/samples'
+import type { Arch } from '@/core/types'
 
 const { locale } = useI18n()
 const {
@@ -136,15 +137,26 @@ const ARM_COMPILERS = [
 const X86_COMPILERS = [
   { id: 'cg142', name: 'x86-64 GCC 14.2.0' },
 ]
-const currentCompilers = computed(() => arch.value === 'arm' ? ARM_COMPILERS : X86_COMPILERS)
+const RV32_COMPILERS = [
+  { id: 'rv32-gcc1610', name: 'RISC-V GCC 16.1.0' },
+]
+const ALL_COMPILERS = [...ARM_COMPILERS, ...X86_COMPILERS, ...RV32_COMPILERS]
+const currentCompilers = computed(() => {
+  if (arch.value === 'arm')  return ARM_COMPILERS
+  if (arch.value === 'rv32') return RV32_COMPILERS
+  return X86_COMPILERS
+})
 
 const COMPILER_DEFAULT_FLAGS: Record<string, string> = {
-  carmug1520: '-mcpu=cortex-m3 -mthumb',
-  'cg142':    '-masm=intel',
+  carmug1520:     '-mcpu=cortex-m3 -mthumb',
+  'cg142':        '-masm=intel',
+  'rv32-gcc1610': '-march=rv32gc -mabi=ilp32',
 }
 
-function compilerArch(id: string): 'arm' | 'x86' {
-  return id === 'cg142' ? 'x86' : 'arm'
+function compilerArch(id: string): Arch {
+  if (id === 'cg142') return 'x86'
+  if (id.startsWith('rv32')) return 'rv32'
+  return 'arm'
 }
 
 function sampleName(s: SampleDef): string {
@@ -161,7 +173,7 @@ const hasResult = ref(false)
 let view: EditorView | null = null
 
 const compilerDisplayName = computed(() =>
-  [...ARM_COMPILERS, ...X86_COMPILERS].find(c => c.id === compilerId.value)?.name ?? compilerId.value
+  ALL_COMPILERS.find(c => c.id === compilerId.value)?.name ?? compilerId.value
 )
 
 const compileBarState = computed(() => {
@@ -232,12 +244,16 @@ function onCompilerChange() {
 }
 
 watch(() => arch.value, (newArch) => {
-  if (newArch === 'x86' && compilerId.value !== 'cg142') {
-    compilerId.value = 'cg142'
-    extraFlags.value = COMPILER_DEFAULT_FLAGS['cg142'] ?? ''
-  } else if (newArch === 'arm' && compilerId.value === 'cg142') {
-    compilerId.value = 'carmug1520'
-    extraFlags.value = COMPILER_DEFAULT_FLAGS['carmug1520'] ?? ''
+  const currentArch = compilerArch(compilerId.value)
+  if (currentArch !== newArch) {
+    if (newArch === 'x86') {
+      compilerId.value = 'cg142'
+    } else if (newArch === 'rv32') {
+      compilerId.value = 'rv32-gcc1610'
+    } else {
+      compilerId.value = 'carmug1520'
+    }
+    extraFlags.value = COMPILER_DEFAULT_FLAGS[compilerId.value] ?? ''
   }
   hasResult.value = false
   errors.value = []

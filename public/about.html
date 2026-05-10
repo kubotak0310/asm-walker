@@ -72,8 +72,9 @@
       <tr><th>アーキテクチャ</th><th>コンパイラ</th><th>構文</th></tr>
     </thead>
     <tbody>
-      <tr><td>ARM Cortex-M</td><td>ARM GCC 11.2.1 / 13.2.0 / 14.3.0</td><td>ARM 構文</td></tr>
+      <tr><td>ARM Cortex-M</td><td>ARM GCC 11.2.1 / 13.2.0 / 14.3.0 / 15.2.0</td><td>ARM 構文</td></tr>
       <tr><td>x86-64</td><td>x86-64 GCC 14.2.0</td><td>Intel 構文（<code>-masm=intel</code>）</td></tr>
+      <tr><td>RISC-V RV32IM</td><td>GCC 13.2.0 (<code>-march=rv32im -mabi=ilp32</code>)</td><td>RISC-V ASM 構文</td></tr>
     </tbody>
   </table>
 
@@ -100,6 +101,7 @@
     <tbody>
       <tr><td>x86-64</td><td><code>0x401000</code></td><td>命令0=0x401000, 命令1=0x401004 …</td></tr>
       <tr><td>ARM Cortex-M</td><td><code>0x08000000</code></td><td>命令0=0x08000000, 命令1=0x08000004 …</td></tr>
+      <tr><td>RISC-V RV32</td><td><code>0x00010000</code></td><td>命令0=0x00010000, 命令1=0x00010004 …</td></tr>
     </tbody>
   </table>
 
@@ -112,6 +114,7 @@
     <tbody>
       <tr><td>x86-64</td><td>1〜15 バイト（可変長）</td><td>4 バイト固定</td></tr>
       <tr><td>ARM Thumb2</td><td>2 または 4 バイト混在</td><td>4 バイト固定</td></tr>
+      <tr><td>RISC-V RV32I</td><td>4 バイト固定（C拡張除く）</td><td>4 バイト固定</td></tr>
     </tbody>
   </table>
   <div class="note">
@@ -129,6 +132,7 @@
   </p>
   <p>対応命令（x86-64）: <code>MOV / LEA / PUSH / POP / ADD / SUB / IMUL / IDIV / AND / OR / XOR / SHL / SHR / CMP / TEST / JMP / Jcc / CALL / RET / LEAVE</code> ほか</p>
   <p>対応命令（ARM）: <code>MOV / LDR / STR / ADD / SUB / MUL / CMP / B / BL / BX / PUSH / POP / LSL / LSR</code> ほか</p>
+  <p>対応命令（RISC-V RV32IM）: <code>ADD / ADDI / SUB / LUI / AUIPC / AND / OR / XOR / SLL / SRL / SRA / SLT / LW / SW / BEQ / BNE / BLT / BGE / JAL / JALR / CALL / RET / MUL / DIV</code> ほか</p>
 
   <h2 id="guides">学習ガイド</h2>
   <p>アセンブラの仕組みをより深く理解するための解説ページを用意しています。</p>

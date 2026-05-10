@@ -1,6 +1,6 @@
 // プロジェクト全体で共有する型定義と定数。アーキテクチャ非依存の共通データ構造を置く。
 
-export type Arch = 'x86' | 'arm'
+export type Arch = 'x86' | 'arm' | 'rv32'
 export type Locale = 'ja' | 'en'
 
 export interface Flags {
@@ -88,8 +88,10 @@ export interface PresetData {
 // 仮想アドレス空間の配置。実機に近い値を使うことで「アドレスっぽい値」の判定が自然に機能する。
 export const BASE_SP_X86 = 0x7fff00   // x86-64 ユーザースタック領域の上端付近
 export const BASE_SP_ARM = 0x20008000 // ARM Cortex-M SRAM 末尾（スタックは下方向に成長）
+export const BASE_SP_RV32 = 0x00080000 // RV32 スタック上端（下方向に成長）
 export const BASE_PC_X86 = 0x401000   // x86-64 ELF の典型的なコードセグメント先頭
 export const BASE_PC_ARM = 0x08000000 // ARM Cortex-M Flash メモリ先頭
+export const BASE_PC_RV32 = 0x00010000 // RISC-V テキストセグメント先頭
 export const BASE_ROM_DATA = 0x08010000 // リテラルプール疑似 ROM 領域の先頭（スタックパネル表示対象外）
 
 // 無限ループ対策のトレース上限ステップ数（ARM / x86 トレーサー共通）
@@ -102,6 +104,7 @@ export const VIRTUAL_INSTR_SIZE = 4
 export const ARG_REGS: Record<Arch, readonly string[]> = {
   arm: ['r0', 'r1', 'r2', 'r3'],
   x86: ['rdi', 'rsi', 'rdx', 'rcx', 'r8', 'r9'],
+  rv32: ['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'],
 }
 
 // フレーム深度でローテーションする色（FrameViz・StackPanel・インタープリタ共通で 3 色をループ）

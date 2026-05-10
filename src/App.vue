@@ -4,7 +4,7 @@
       <AppHeader />
 
       <!-- Top controls -->
-      <div class="space-y-2">
+      <div class="space-y-3">
         <div class="flex flex-wrap items-center gap-3">
           <ArchSwitch />
         </div>

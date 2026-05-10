@@ -1,6 +1,6 @@
 export default {
   app: {
-    subtitle: 'ARM Cortex-M / x86-64 Assembly Learning Tool',
+    subtitle: 'ARM Cortex-M / x86-64 / RISC-V Assembly Learning Tool',
     guide: 'Guide',
     guideItems: {
       machineCode: 'Machine Code & Assembly',
@@ -9,12 +9,14 @@ export default {
       functionCall: 'How Function Calls Work',
       branch: 'Conditional Branches',
       pointer: 'Pointers & Addresses',
+      registers: 'Register Reference',
+      flags: 'Flag Registers',
       about: 'About This Tool',
     },
   },
   stepController: {
-    prev: '◀ Back',
-    next: 'Next Step ▶',
+    prev: 'Back',
+    next: 'Next Step',
     reset: 'Reset',
   },
   cCompilePanel: {
@@ -34,8 +36,10 @@ export default {
     returnValue: 'return:',
     abiArgArm: 'ARM ABI: r0–r3 are argument registers',
     abiArgX86: 'x86-64 ABI: rdi–r9 are argument registers',
+    abiArgRv32: 'RISC-V ABI: a0–a7 are argument registers',
     abiRetArm: 'ARM ABI: r0 holds the return value',
     abiRetX86: 'x86-64 ABI: rax holds the return value',
+    abiRetRv32: 'RISC-V ABI: a0 holds the return value',
     gccOutput: 'Compiler output (gcc stderr)',
     simError: 'Simulator error',
   },
@@ -68,6 +72,15 @@ export default {
       { sym: 'DWORD PTR', desc: '4-byte memory access',                      ex: 'DWORD PTR [rbp-4]' },
       { sym: 'QWORD PTR', desc: '8-byte memory access',                      ex: 'QWORD PTR [rsp]' },
       { sym: 'cc',        desc: 'Condition code (e=eq, ne=neq, l=lt, g=gt…)', ex: 'je, jne, jl, jg' },
+    ],
+    helpRv32: [
+      { sym: 'rd',          desc: 'Destination register',                    ex: 'a0, t1, s0' },
+      { sym: 'rs1',         desc: 'First source register',                   ex: 'a1, sp' },
+      { sym: 'rs2',         desc: 'Second source register',                  ex: 'a2, t0' },
+      { sym: 'imm',         desc: 'Immediate literal (no # prefix)',         ex: '4, -8, 0x10' },
+      { sym: 'offset(rs1)', desc: 'Memory address: rs1 + offset',            ex: '0(sp), -4(s0)' },
+      { sym: 'label',       desc: 'Branch / jump target label',              ex: '.L1, main' },
+      { sym: 'shamt',       desc: 'Shift amount (0–31)',                     ex: 'slli a0, a0, 2' },
     ],
   },
   codePanel: {

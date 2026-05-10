@@ -18,7 +18,7 @@
       <div v-if="arch !== 'rv32'" class="pt-1 border-t border-gray-700 mt-1">
         <div class="flex items-center justify-between text-gray-400 mb-1">
           <span>{{ $t('specialRegPanel.flags') }}</span>
-          <a href="/guide/flags.html" target="_blank" rel="noopener"
+          <a :href="locale === 'en' ? '/guide/en/flags.html' : '/guide/flags.html'" target="_blank" rel="noopener"
              class="flex items-center text-gray-500 hover:text-gray-200 transition-colors">
             <span class="material-icons text-sm leading-none">menu_book</span>
           </a>
@@ -34,9 +34,11 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSimulator } from '@/composables/useSimulator'
 import { hexU32 } from '@/core/simulator'
 
+const { locale } = useI18n()
 const { arch, currentState: state, prevState: prev, displayPc, displayPcChanged } = useSimulator()
 
 const fpValue = computed(() =>

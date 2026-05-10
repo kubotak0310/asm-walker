@@ -1,5 +1,6 @@
-// RISC-V RV32IM アセンブラのパーサー。
-// Godbolt (GCC -march=rv32im -mabi=ilp32) の出力形式を前提とする。
+// RISC-V RV32GC アセンブラのパーサー。
+// Godbolt (GCC -march=rv32gc -mabi=ilp32) の出力形式を前提とする。
+// Compressed 拡張（c. プレフィックス）命令はシミュレーター非対応のためスキップする。
 
 export interface RV32Instruction {
   lineIndex: number
@@ -173,7 +174,12 @@ export function parseRV32(text: string): RV32ParseResult {
     }
 
     if (trimmed) {
-      instrLines.push({ lineIndex: i, raw: trimmed })
+      // Compressed 拡張命令（c. プレフィックス）はシミュレーター非対応のためスキップ
+      // GCC -march=rv32gc は -O0 では c. 命令を出力しないが、高最適化レベルへの安全策として除去する
+      const mnemonic = trimmed.split(/\s/)[0]?.toLowerCase() ?? ''
+      if (!mnemonic.startsWith('c.')) {
+        instrLines.push({ lineIndex: i, raw: trimmed })
+      }
     }
   }
 

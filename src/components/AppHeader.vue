@@ -54,11 +54,11 @@
               <span class="material-icons text-sm text-gray-500">article</span>{{ $t('app.guideItems.pointer') }}
             </a>
             <div class="border-t border-gray-700 my-1"></div>
-            <a href="/guide/registers.html" target="_blank" rel="noopener"
+            <a :href="guideUrl('registers')" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">table_chart</span>{{ $t('app.guideItems.registers') }}
             </a>
-            <a href="/guide/flags.html" target="_blank" rel="noopener"
+            <a :href="guideUrl('flags')" target="_blank" rel="noopener"
                class="flex items-center gap-2 px-4 py-2 text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
               <span class="material-icons text-sm text-gray-500">flag</span>{{ $t('app.guideItems.flags') }}
             </a>

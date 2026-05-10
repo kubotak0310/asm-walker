@@ -2,7 +2,7 @@
   <div class="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
     <div class="px-3 py-2 bg-gray-700 text-gray-300 text-xs font-bold flex items-center justify-between">
       <span>{{ $t('registerPanel.header') }}</span>
-      <a href="/guide/registers.html" target="_blank" rel="noopener"
+      <a :href="locale === 'en' ? '/guide/en/registers.html' : '/guide/registers.html'" target="_blank" rel="noopener"
          class="flex items-center text-gray-400 hover:text-gray-200 transition-colors font-normal">
         <span class="material-icons text-sm leading-none">menu_book</span>
       </a>
@@ -42,10 +42,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSimulator } from '@/composables/useSimulator'
 import { hexU32 } from '@/core/simulator'
 import BadgeLabel from './BadgeLabel.vue'
 
+const { locale } = useI18n()
 const { arch, currentState, prevState, currentStepData, isReturnStep, returnReg, callArgCount } = useSimulator()
 
 const x86Regs = ['rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15']

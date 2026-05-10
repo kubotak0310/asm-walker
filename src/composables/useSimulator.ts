@@ -440,7 +440,7 @@ async function simulateCompiled(cSource: string, compilerId: string, optLevel: s
     }
 
     // Godbolt のコンパイラ ID 命名規則に依存
-    // rv32: "rv32-gcc1320" など / arm: "carm1121", "armug1320" など / x86: "cg142" など
+    // rv32: "rv32-gcc1610" (-march=rv32gc) / arm: "carmug1520" など / x86: "cg142" など
     const isRv32 = compilerId.includes('rv32')
     const isArm = !isRv32 && compilerId.includes('arm')
     arch.value = isRv32 ? 'rv32' : isArm ? 'arm' : 'x86'

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flag Registers — AsmWalker Guide</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.75;
+      color: #222;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 5rem;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.25rem; margin-top: 3rem; border-bottom: 2px solid #e0e0e0; padding-bottom: 0.3rem; }
+    h3 { font-size: 1rem; margin-top: 1.8rem; color: #333; }
+    p  { margin: 0.6rem 0; }
+    ul, ol { padding-left: 1.5rem; }
+    li { margin: 0.3rem 0; }
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f4f4f4;
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+    pre {
+      background: #f6f8fa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+    pre code { background: none; padding: 0; font-size: inherit; }
+    .comment { color: #6a737d; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+    }
+    th, td { border: 1px solid #ddd; padding: 0.5rem 0.8rem; text-align: left; vertical-align: top; }
+    th { background: #f0f0f0; }
+
+    .flag-badge {
+      display: inline-block;
+      font-family: "SFMono-Regular", monospace;
+      font-size: 1rem;
+      font-weight: bold;
+      width: 2rem;
+      height: 2rem;
+      line-height: 2rem;
+      text-align: center;
+      border-radius: 4px;
+      vertical-align: middle;
+      margin-right: 0.25rem;
+    }
+    .flag-n  { background: #ffe0e0; color: #b71c1c; border: 1px solid #ef9a9a; }
+    .flag-z  { background: #e0f0e0; color: #1b5e20; border: 1px solid #a5d6a7; }
+    .flag-c  { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+    .flag-v  { background: #ede7ff; color: #4527a0; border: 1px solid #b39ddb; }
+    .flag-sf { background: #ffe0e0; color: #b71c1c; border: 1px solid #ef9a9a; }
+    .flag-zf { background: #e0f0e0; color: #1b5e20; border: 1px solid #a5d6a7; }
+    .flag-cf { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+    .flag-of { background: #ede7ff; color: #4527a0; border: 1px solid #b39ddb; }
+    .flag-pf { background: #e8f4fd; color: #0d47a1; border: 1px solid #90caf9; }
+
+    .arch-label {
+      display: inline-block;
+      padding: 0.15em 0.6em;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    .arch-arm  { background: #ede7ff; color: #5c35b5; border: 1px solid #c4b0ff; }
+    .arch-x86  { background: #e0edff; color: #1a5fa8; border: 1px solid #a8c8ff; }
+    .arch-rv32 { background: #e2f5e8; color: #2a7a3b; border: 1px solid #8fd4a0; }
+
+    .note {
+      background: #e8f4fd;
+      border-left: 4px solid #2196f3;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .key {
+      background: #fff8e1;
+      border-left: 4px solid #f0b429;
+      padding: 0.7rem 1rem;
+      margin: 1.2rem 0;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.93rem;
+    }
+    .rv32-box {
+      background: #f0faf2;
+      border: 1px solid #8fd4a0;
+      border-left: 4px solid #2da44e;
+      border-radius: 0 6px 6px 0;
+      padding: 0.9rem 1.1rem;
+      margin: 1.2rem 0;
+    }
+
+    .cond-table td:first-child { font-family: monospace; white-space: nowrap; }
+
+    .toc { background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 6px; padding: 1rem 1.5rem; margin: 1.5rem 0; }
+    .toc h4 { margin: 0 0 0.5rem; font-size: 0.95rem; color: #555; }
+    .toc ol { margin: 0; padding-left: 1.3rem; }
+    .toc li { margin: 0.2rem 0; }
+    .toc a { color: #0066cc; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    footer { margin-top: 4rem; font-size: 0.85rem; color: #888; border-top: 1px solid #eee; padding-top: 1rem; }
+    .guide-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; }
+    .guide-nav-side { flex: 1; }
+    .guide-nav-right { text-align: right; }
+    .guide-nav a { color: #0066cc; text-decoration: none; }
+    .guide-nav a:hover { text-decoration: underline; }
+    .guide-nav-center { color: #555; white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+  <h1>Flag Registers</h1>
+  <p><strong>Flag registers</strong> are special registers that record properties of the last computation result, one bit per property.
+  Conditional branch instructions read these flags to decide whether to jump.
+  ARM and x86 have flag registers; RISC-V does not.</p>
+
+  <div class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#arm">ARM Flags (CPSR: N / Z / C / V)</a></li>
+      <li><a href="#x86">x86-64 Flags (RFLAGS: ZF / CF / SF / OF)</a></li>
+      <li><a href="#rv32">RISC-V: No Flag Register</a></li>
+      <li><a href="#branch">Flags and Conditional Branches</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="arm">1. ARM Flags (CPSR)</h2>
+
+  <span class="arch-label arch-arm">ARM Cortex-M / CPSR</span>
+
+  <p>ARM stores four condition flags in the top bits of the <strong>CPSR (Current Program Status Register)</strong>.
+  They are updated by instructions such as <code>ADDS</code>, <code>SUBS</code>, <code>CMP</code>, and <code>TST</code>,
+  and read by conditional branches like <code>BEQ</code> and <code>BLT</code>.</p>
+
+  <table>
+    <thead>
+      <tr><th>Flag</th><th>Name</th><th>Set when</th><th>Typical use</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="flag-badge flag-n">N</span> Negative</td>
+        <td>Negative flag</td>
+        <td>Bit 31 of the result is 1 (result is negative in signed arithmetic)</td>
+        <td><code>BMI</code> (branch if minus)</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-z">Z</span> Zero</td>
+        <td>Zero flag</td>
+        <td>Result is exactly 0</td>
+        <td><code>BEQ</code> (equal) · <code>BNE</code> (not equal)</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-c">C</span> Carry</td>
+        <td>Carry flag</td>
+        <td>Addition produced a carry out of bit 31, or subtraction did <strong>not</strong> borrow</td>
+        <td><code>BCS</code> (carry set) · unsigned comparisons (<code>BHI</code>/<code>BLS</code>)</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-v">V</span> Overflow</td>
+        <td>Overflow flag</td>
+        <td>Signed result fell outside −2³¹ to 2³¹−1 (positive + positive = negative, or negative + negative = positive)</td>
+        <td><code>BVS</code> (overflow) · signed comparisons (<code>BGT</code>/<code>BLE</code>)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>ARM's C flag is inverted relative to x86:</strong><br>
+    For ARM subtraction (<code>SUB</code>/<code>CMP</code>), the C flag is 1 when <strong>no borrow occurred</strong>.
+    x86's CF is 1 when a borrow <em>did</em> occur — the opposite convention.
+    AsmWalker's Special Registers panel shows the live C flag value as you step.
+  </div>
+
+  <h3>The S suffix for flag updates</h3>
+  <p>In ARM, appending <code>S</code> to an instruction name causes it to update the flags. Without <code>S</code>, flags are unchanged.</p>
+
+  <pre><code>MOV  r0, #0     <span class="comment">; r0 = 0. Flags are NOT updated.</span>
+MOVS r0, #0     <span class="comment">; r0 = 0. Result is 0, so Z=1, N=0 are written.</span>
+
+CMP  r0, r1     <span class="comment">; Compute r0 - r1 and update flags only (no S needed — CMP always updates)</span>
+BEQ  label      <span class="comment">; Jump if Z=1 (i.e. r0 == r1)</span></code></pre>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    Compile the Conditional Branch sample (ARM) and step through it.
+    At the <code>CMP</code> instruction you will see the flags update in the Special Registers panel.
+    The following <code>BEQ</code>/<code>BNE</code> step shows which flag was read to determine the jump.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="x86">2. x86-64 Flags (RFLAGS)</h2>
+
+  <span class="arch-label arch-x86">x86-64 / RFLAGS</span>
+
+  <p>x86-64 stores flags in the 64-bit <strong>RFLAGS</strong> register. The four or five flags that appear most often in assembly code are listed below.
+  They are updated by <code>CMP</code>, <code>TEST</code>, <code>ADD</code>, <code>SUB</code>, etc.,
+  and read by conditional jumps like <code>JE</code> and <code>JL</code>.</p>
+
+  <table>
+    <thead>
+      <tr><th>Flag</th><th>Name</th><th>Set when</th><th>Typical use</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="flag-badge flag-zf">ZF</span></td>
+        <td>Zero Flag</td>
+        <td>Result is exactly 0</td>
+        <td><code>JE</code> (equal) · <code>JNE</code> (not equal)</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-sf">SF</span></td>
+        <td>Sign Flag</td>
+        <td>Most-significant bit of the result is 1 (negative number)</td>
+        <td><code>JS</code> (negative) · combined with OF for signed comparisons</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-cf">CF</span></td>
+        <td>Carry Flag</td>
+        <td>Unsigned overflow — carry out of addition or borrow from subtraction</td>
+        <td><code>JB</code> (unsigned below) · <code>JAE</code> (unsigned above or equal)</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-of">OF</span></td>
+        <td>Overflow Flag</td>
+        <td>Signed overflow (positive + positive = negative, or negative + negative = positive)</td>
+        <td><code>JO</code> (overflow) · signed comparisons (<code>JL</code>/<code>JGE</code>)</td>
+      </tr>
+      <tr>
+        <td><span class="flag-badge flag-pf">PF</span></td>
+        <td>Parity Flag</td>
+        <td>Number of set bits in the low byte of the result is even</td>
+        <td>Floating-point comparisons · some crypto code (rarely used in everyday code)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>CMP vs TEST</h3>
+
+  <pre><code>CMP  rax, rbx    <span class="comment">; compute rax - rbx, update flags only (rax unchanged)</span>
+TEST rax, rax    <span class="comment">; compute rax AND rax, update flags only (zero-check idiom)</span>
+
+<span class="comment">; Conditional jump examples</span>
+cmp  eax, 0      <span class="comment">; eax - 0 → ZF=1 if eax is 0</span>
+je   .zero       <span class="comment">; jump to .zero if ZF=1 (i.e. eax == 0)</span>
+
+test eax, eax    <span class="comment">; eax & eax → ZF=1 if eax is 0 (same effect, 1 byte shorter)</span>
+jne  .nonzero    <span class="comment">; jump to .nonzero if ZF=0 (i.e. eax != 0)</span></code></pre>
+
+  <div class="note">
+    <strong>Try it in AsmWalker:</strong><br>
+    Compile the Conditional Branch sample (x86) and step through it.
+    At the <code>CMP</code>/<code>TEST</code> instruction, the flags (ZF/SF/CF/OF) update in the Special Registers panel.
+    The next <code>JE</code>/<code>JL</code> step shows whether the branch is actually taken.
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="rv32">3. RISC-V: No Flag Register</h2>
+
+  <span class="arch-label arch-rv32">RISC-V RV32 / No flags</span>
+
+  <div class="rv32-box">
+    <strong>RISC-V has no flag register.</strong><br><br>
+    ARM and x86 use a two-step approach: "compare instruction sets flags → conditional jump reads flags."
+    RISC-V handles this in <strong>a single instruction that compares and branches simultaneously</strong>.
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Architecture</th><th>Implementing "jump if a == b"</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="arch-label arch-arm">ARM</span></td>
+        <td>
+          <code>CMP r0, r1</code> (compute r0 − r1 to set flags)<br>
+          <code>BEQ label</code> (jump if ZF=1)
+        </td>
+      </tr>
+      <tr>
+        <td><span class="arch-label arch-x86">x86-64</span></td>
+        <td>
+          <code>CMP eax, ebx</code> (compute eax − ebx to set flags)<br>
+          <code>JE label</code> (jump if ZF=1)
+        </td>
+      </tr>
+      <tr>
+        <td><span class="arch-label arch-rv32">RISC-V</span></td>
+        <td>
+          <code>beq a0, a1, label</code> (compare a0 == a1 and branch — one instruction)
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>All RISC-V branch instructions (<code>beq</code>, <code>bne</code>, <code>blt</code>, <code>bge</code>, <code>bltu</code>, <code>bgeu</code>) follow the pattern "compare two registers and jump." Because no flags are involved, the Special Registers panel in AsmWalker shows no flags section when RISC-V is selected.</p>
+
+  <table>
+    <thead>
+      <tr><th>Instruction</th><th>Condition</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>beq rs1, rs2, label</code></td><td>rs1 == rs2</td><td>Branch if Equal</td></tr>
+      <tr><td><code>bne rs1, rs2, label</code></td><td>rs1 != rs2</td><td>Branch if Not Equal</td></tr>
+      <tr><td><code>blt rs1, rs2, label</code></td><td>rs1 &lt; rs2 (signed)</td><td>Branch if Less Than</td></tr>
+      <tr><td><code>bge rs1, rs2, label</code></td><td>rs1 &ge; rs2 (signed)</td><td>Branch if Greater or Equal</td></tr>
+      <tr><td><code>bltu rs1, rs2, label</code></td><td>rs1 &lt; rs2 (unsigned)</td><td>Branch if Less Than Unsigned</td></tr>
+      <tr><td><code>bgeu rs1, rs2, label</code></td><td>rs1 &ge; rs2 (unsigned)</td><td>Branch if Greater or Equal Unsigned</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>Comparing against zero:</strong><br>
+    RISC-V's <code>zero</code> register (always 0) makes zero comparisons natural.<br>
+    <code>beq a0, zero, label</code> → jump if a0 == 0 (equivalent to ARM's <code>CBZ</code> or x86's <code>test eax,eax</code> + <code>je</code>)<br>
+    <code>blt a0, zero, label</code> → jump if a0 is negative (equivalent to ARM's <code>BMI</code>)
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="branch">4. Flags and Conditional Branches</h2>
+
+  <p>In ARM and x86, a conditional branch reads the flags left by the most recent comparison or arithmetic instruction and decides whether to jump.</p>
+
+  <table class="cond-table">
+    <thead>
+      <tr><th>ARM</th><th>x86-64</th><th>Condition (C notation)</th><th>Flags checked</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>BEQ</code></td><td><code>JE</code></td><td>a == b</td><td>Z=1</td></tr>
+      <tr><td><code>BNE</code></td><td><code>JNE</code></td><td>a != b</td><td>Z=0</td></tr>
+      <tr><td><code>BLT</code></td><td><code>JL</code></td><td>a &lt; b (signed)</td><td>N != V</td></tr>
+      <tr><td><code>BLE</code></td><td><code>JLE</code></td><td>a &le; b (signed)</td><td>Z=1 or N != V</td></tr>
+      <tr><td><code>BGT</code></td><td><code>JG</code></td><td>a &gt; b (signed)</td><td>Z=0 and N == V</td></tr>
+      <tr><td><code>BGE</code></td><td><code>JGE</code></td><td>a &ge; b (signed)</td><td>N == V</td></tr>
+      <tr><td><code>BLO</code> / <code>BCC</code></td><td><code>JB</code></td><td>a &lt; b (unsigned)</td><td>C=0 (ARM) / CF=1 (x86)</td></tr>
+      <tr><td><code>BHS</code> / <code>BCS</code></td><td><code>JAE</code></td><td>a &ge; b (unsigned)</td><td>C=1 (ARM) / CF=0 (x86)</td></tr>
+      <tr><td><code>BMI</code></td><td><code>JS</code></td><td>result is negative</td><td>N=1 / SF=1</td></tr>
+      <tr><td><code>BPL</code></td><td><code>JNS</code></td><td>result is zero or positive</td><td>N=0 / SF=0</td></tr>
+    </tbody>
+  </table>
+
+  <div class="key">
+    <strong>Signed vs unsigned comparisons:</strong><br>
+    "Less than" has two variants — signed (<code>BLT</code>/<code>JL</code>) and unsigned (<code>BLO</code>/<code>JB</code>) — which check different flags.
+    The compiler uses <code>BLT</code>/<code>JL</code> for C's <code>int</code> (signed) and <code>BLO</code>/<code>JB</code> for <code>unsigned int</code>.
+    When reading assembly, always check which variant is used.
+  </div>
+
+  <footer>
+    AsmWalker Guide
+    <nav class="guide-nav">
+      <span class="guide-nav-side"><a href="/guide/en/registers.html">← Register Reference</a></span>
+      <a href="/about.en.html#guides" class="guide-nav-center">Guide Index</a>
+      <span class="guide-nav-side guide-nav-right"></span>
+    </nav>
+  </footer>
+
+</body>
+</html>

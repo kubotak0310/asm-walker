@@ -138,7 +138,7 @@ const X86_COMPILERS = [
   { id: 'cg142', name: 'x86-64 GCC 14.2.0' },
 ]
 const RV32_COMPILERS = [
-  { id: 'rv32-gcc1320', name: 'RISC-V GCC 13.2.0' },
+  { id: 'rv32-gcc1610', name: 'RISC-V GCC 16.1.0' },
 ]
 const ALL_COMPILERS = [...ARM_COMPILERS, ...X86_COMPILERS, ...RV32_COMPILERS]
 const currentCompilers = computed(() => {
@@ -150,7 +150,7 @@ const currentCompilers = computed(() => {
 const COMPILER_DEFAULT_FLAGS: Record<string, string> = {
   carmug1520:     '-mcpu=cortex-m3 -mthumb',
   'cg142':        '-masm=intel',
-  'rv32-gcc1320': '-march=rv32im -mabi=ilp32',
+  'rv32-gcc1610': '-march=rv32gc -mabi=ilp32',
 }
 
 function compilerArch(id: string): Arch {
@@ -249,7 +249,7 @@ watch(() => arch.value, (newArch) => {
     if (newArch === 'x86') {
       compilerId.value = 'cg142'
     } else if (newArch === 'rv32') {
-      compilerId.value = 'rv32-gcc1320'
+      compilerId.value = 'rv32-gcc1610'
     } else {
       compilerId.value = 'carmug1520'
     }
